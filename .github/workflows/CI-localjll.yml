@@ -1,18 +1,19 @@
-name: CI with local libReactant
+name: CI (Enzyme-JAX Nightly)
 
 on:
   pull_request:
-    paths:
-      - '.github/workflows/CI-localjll.yml'
-      - 'deps/**'
+    paths: &paths
+      - "ext/**"
+      - "lib/**"
+      - "src/**"
+      - "test/**"
+      - "Project.toml"
   push:
     branches:
       - main
       - release-*
-    tags: ['*']
-    paths:
-      - '.github/workflows/CI-localjll.yml'
-      - 'deps/**'
+    paths: *paths
+  workflow_dispatch:
 
 concurrency:
   # Skip intermediate builds: always.
@@ -21,23 +22,24 @@ concurrency:
   cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
 
 jobs:
-  test-localjll:
-    strategy:
-      fail-fast: false
-      matrix:
-        version:
-          - "1.10"
-          - "1.12"
-        os:
-          - linux-x86-n4-32
-          - linux-x86-a2-48-a100-4gpu
-        exclude:
-          - os: linux-x86-a2-48-a100-4gpu
-            version: "1.10"
+  test-nightly-cpu:
+    name: Nightly CPU
     uses: ./.github/workflows/CommonCI.yml
     with:
-      julia_version: ${{ matrix.version }}
-      os: ${{ matrix.os }}
+      julia_version: "1.12"
+      os: linux-x86-n4-32
       runtime: "both"
       assertions: false
       localjll: true
+      libreactant_url: https://github.com/EnzymeAD/Enzyme-JAX/releases/download/nightly/libreactant-linux-x86_64-cpu.tar.zst
+
+  test-nightly-gpu:
+    name: Nightly GPU (CUDA 13)
+    uses: ./.github/workflows/CommonCI.yml
+    with:
+      julia_version: "1.12"
+      os: linux-x86-a2-48-a100-4gpu
+      runtime: "both"
+      assertions: false
+      localjll: true
+      libreactant_url: https://github.com/EnzymeAD/Enzyme-JAX/releases/download/nightly/libreactant-linux-x86_64-cuda13.tar.zst

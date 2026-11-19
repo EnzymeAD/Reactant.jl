@@ -45,6 +45,16 @@ on:
         required: false
         default: ""
         type: string
+      libreactant_artifact:
+        description: "Prebuilt libReactant workflow artifact name"
+        required: false
+        default: ""
+        type: string
+      libreactant_url:
+        description: "URL to prebuilt libReactant .tar.zst archive"
+        required: false
+        default: ""
+        type: string
 
 jobs:
   test:
@@ -56,10 +66,10 @@ jobs:
         uses: jlumbroso/free-disk-space@main
         with:
           tool-cache: false
-        if: ${{ startsWith(inputs.os, 'ubuntu-') && (inputs.localjll || inputs.enzymejax_commit != '') }}
+        if: ${{ startsWith(inputs.os, 'ubuntu-') && inputs.libreactant_artifact == '' && inputs.libreactant_url == '' && (inputs.localjll || inputs.enzymejax_commit != '') }}
       - name: Clean `/opt`
         run: sudo rm -rf /opt/*
-        if: ${{ startsWith(inputs.os, 'ubuntu-') && (inputs.localjll || inputs.enzymejax_commit != '') }}
+        if: ${{ startsWith(inputs.os, 'ubuntu-') && inputs.libreactant_artifact == '' && inputs.libreactant_url == '' && (inputs.localjll || inputs.enzymejax_commit != '') }}
 
       - uses: actions/checkout@v7
         with:
@@ -67,7 +77,7 @@ jobs:
           ref: ${{ github.repository == 'EnzymeAD/Reactant.jl' && (github.event.pull_request.head.sha || github.sha) || inputs.ref }}
 
       - name: Patch Enzyme-JAX commit
-        if: ${{ inputs.enzymejax_commit != '' }}
+        if: ${{ inputs.libreactant_artifact == '' && inputs.libreactant_url == '' && inputs.enzymejax_commit != '' }}
         shell: bash
         run: |
           sed -i.bak 's/ENZYMEXLA_COMMIT = "[^"]*"/ENZYMEXLA_COMMIT = "${{ inputs.enzymejax_commit }}"/' deps/ReactantExtra/WORKSPACE
@@ -91,7 +101,7 @@ jobs:
       - uses: julia-actions/cache@v3.5.0
         id: julia-cache
         with:
-          cache-name: julia-cache;workflow=${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-${{ inputs.test_args }}-${{ inputs.downgrade_testing }}-${{ inputs.localjll || inputs.enzymejax_commit != '' }}-${{ inputs.enzymejax_commit }}
+          cache-name: julia-cache;workflow=${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-${{ inputs.test_args }}-${{ inputs.downgrade_testing }}-${{ inputs.localjll || inputs.enzymejax_commit != '' || inputs.libreactant_artifact != '' || inputs.libreactant_url != '' }}-${{ inputs.enzymejax_commit }}-${{ inputs.libreactant_artifact }}
           gcp-bucket: ${{ contains(inputs.os, 'linux') && 'enzyme-ci-transient' || '' }}
           key-prefix: reactantjl_v2/
 
@@ -101,9 +111,9 @@ jobs:
           skip: "ReactantCore"
           julia_version: ${{ inputs.julia_version }}
 
-      # Local build of libReactant
+      # Local build of libReactant (when no prebuilt artifact or URL was provided)
       - uses: bazel-contrib/setup-bazel@0.18.0
-        if: ${{ inputs.localjll || inputs.enzymejax_commit != '' }}
+        if: ${{ inputs.libreactant_artifact == '' && inputs.libreactant_url == '' && (inputs.localjll || inputs.enzymejax_commit != '') }}
         name: Set up Bazel
         with:
           # Avoid downloading Bazel every time.
@@ -114,16 +124,16 @@ jobs:
           repository-cache: true
           bazelisk-version: 1.x
       - name: Prepare build on macOS
-        if: ${{ startsWith(inputs.os, 'macOS-') && (inputs.localjll || inputs.enzymejax_commit != '') }}
+        if: ${{ startsWith(inputs.os, 'macOS-') && inputs.libreactant_artifact == '' && inputs.libreactant_url == '' && (inputs.localjll || inputs.enzymejax_commit != '') }}
         run: |
           echo "SDKROOT=$(xcrun --show-sdk-path)" >> "${GITHUB_ENV}"
       - name: Install numpy
-        if: ${{ startsWith(inputs.os, 'macOS-') && (inputs.localjll || inputs.enzymejax_commit != '') }}
+        if: ${{ startsWith(inputs.os, 'macOS-') && inputs.libreactant_artifact == '' && inputs.libreactant_url == '' && (inputs.localjll || inputs.enzymejax_commit != '') }}
         run: |
           python -m pip install numpy
       - name: Build libReactant
         timeout-minutes: 120
-        if: ${{ inputs.localjll || inputs.enzymejax_commit != '' }}
+        if: ${{ inputs.libreactant_artifact == '' && inputs.libreactant_url == '' && (inputs.localjll || inputs.enzymejax_commit != '') }}
         run: |
           julia --color=yes --project=deps -e 'using Pkg; Pkg.instantiate()'
           julia --color=yes --project=deps deps/build_local.jl --cc clang --test ${{ contains(inputs.os, 'linux') && '--push-cache' || '--cache' }}
@@ -142,6 +152,36 @@ jobs:
           sed -i.bak 's/exit 2/exit 0/g' julia/deps/tools/jlchecksum
           make -C julia -j $(nproc) FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1 JULIA_PRECOMPILE=0
           echo $PWD/julia/usr/bin >> $GITHUB_PATH
+
+      - name: Download prebuilt libReactant artifact
+        if: ${{ inputs.libreactant_artifact != '' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.libreactant_artifact }}
+          path: ${{ runner.temp }}/libreactant-artifact
+      - name: Download prebuilt libReactant from URL
+        if: ${{ inputs.libreactant_url != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/libreactant-artifact"
+          COMMIT_URL="$(dirname "${{ inputs.libreactant_url }}")/libreactant-commit.txt"
+          if COMMIT_SHA="$(curl -fsSL "${COMMIT_URL}" 2>/dev/null)"; then
+            echo "Using prebuilt libReactantExtra from Enzyme-JAX commit: ${COMMIT_SHA}"
+            echo "Enzyme-JAX nightly commit: \`${COMMIT_SHA}\`" >> "${GITHUB_STEP_SUMMARY}"
+          fi
+          curl -fL --retry 3 --retry-delay 5 \
+            -o "${RUNNER_TEMP}/libreactant-artifact/libreactant.tar.zst" \
+            "${{ inputs.libreactant_url }}"
+      - name: Install prebuilt libReactant
+        if: ${{ inputs.libreactant_artifact != '' || inputs.libreactant_url != '' }}
+        shell: bash
+        run: |
+          ./.github/scripts/install_libreactant.sh \
+            "${RUNNER_TEMP}/libreactant-artifact/libreactant.tar.zst" \
+            "${GITHUB_WORKSPACE}/libreactant" \
+            "LocalPreferences.toml" \
+            "test/LocalPreferences.toml"
 
       # Install dependencies (specifically ReactantCore subdirectory for 1.10)
       # Disable precompile here, since it will be invalidated based on change
@@ -237,7 +277,7 @@ jobs:
         timeout-minutes: 10
         if: always()
         with:
-          name: "mlir-${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-test_args=${{ inputs.test_args }}-${{ inputs.localjll || inputs.enzymejax_commit != '' }}-${{ inputs.enzymejax_commit }}"
+          name: "mlir-${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-test_args=${{ inputs.test_args }}-${{ inputs.localjll || inputs.enzymejax_commit != '' || inputs.libreactant_artifact != '' || inputs.libreactant_url != '' }}-${{ inputs.enzymejax_commit }}"
           path: "**/*.mlir"
           retention-days: 90
           overwrite: false
