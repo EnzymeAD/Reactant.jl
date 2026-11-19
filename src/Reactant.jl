@@ -325,7 +325,7 @@ export ConcreteRArray,
     annotate
 
 @static if VERSION ≥ v"1.11"
-    @eval $(Expr(:public, :Periodic, :Binomial, :TracedEnum, :ConcreteEnum))
+    @eval $(Expr(:public, :Periodic, :Binomial, :TracedEnum, :ConcreteEnum, :devices))
 end
 
 const registry = Ref{Union{Nothing,MLIR.IR.DialectRegistry}}()
