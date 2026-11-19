@@ -1,6 +1,8 @@
 using Reactant, Test, Enzyme, InteractiveUtils, FileCheck
 
-const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+const RunningOnTPU = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "tpu"
+const RunningOnJuliaCPU =
+    Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "julia-cpu"
 
 Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=sum(x.a))
 
@@ -490,7 +492,7 @@ end
     @test begin
         Reactant.XLA.cost_analysis(mul_comp) isa
         Reactant.MLIR.API.JLHloCostAnalysisProperties
-    end broken = RunningOnTPU
+    end broken = RunningOnTPU || RunningOnJuliaCPU
 end
 
 function fractional_idx(times, t)
@@ -622,7 +624,7 @@ end
 # FIXME: this has too many intermittent failures. Re-enable once fixed
 # @testset "compilation cache" begin
 #     if Reactant.PersistentCompileCache.autotune_cache_enabled() &&
-#         contains(string(Reactant.devices()[1]), "CUDA")
+#         Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "cuda"
 #         A = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 2, 5))
 #         B = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 5, 1000))
 #         @jit A * B

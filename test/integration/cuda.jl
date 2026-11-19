@@ -3,8 +3,8 @@ using Adapt: Adapt
 using BFloat16s: BFloat16
 const ReactantCUDAExt = Base.get_extension(Reactant, :ReactantCUDAExt)
 
-const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
-const RunningOnCUDA = contains(string(Reactant.devices()[1]), "CUDA")
+const RunningOnTPU = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "tpu"
+const RunningOnCUDA = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "cuda"
 
 # LLVM's X86 backend marks bf16 vector types legal on hosts advertising avx512_bf16 but has
 # no selection patterns for them, so vectorized bf16 code aborts during instruction
@@ -329,7 +329,7 @@ end
     @test begin
         @jit searchsorted!(A, B)
         all(Array(A) .≈ 311)
-    end broken = contains(string(Reactant.devices()[1]), "TPU")
+    end broken = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "tpu"
 end
 
 function convert_mul_kernel!(Gu, w::FT) where {FT}

@@ -3,7 +3,7 @@ using Reactant: Ops
 using LinearAlgebra
 using SpecialFunctions: SpecialFunctions
 
-const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+const RunningOnTPU = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "tpu"
 const RunningOnAppleX86 = Sys.isapple() && Sys.ARCH === :x86_64
 
 @testset "abs" begin
@@ -190,7 +190,8 @@ end
 
 @testset "constant" begin
     for x in [[1, 2, 3], [1.1, 2.2, 3.3], [1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im]]
-        if x isa AbstractArray{ComplexF64} && contains(string(Reactant.devices()[1]), "TPU")
+        if x isa AbstractArray{ComplexF64} &&
+            Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "tpu"
             continue
         end
         @test x ≈ @jit Ops.constant(x)
@@ -242,7 +243,8 @@ end
             [9.9 + 10.10im, 11.11 + 12.12im, -13.13 + -14.14im, -15.15 + -16.16im],
         ),
     ]
-        if a isa AbstractArray{ComplexF64} && contains(string(Reactant.devices()[1]), "TPU")
+        if a isa AbstractArray{ComplexF64} &&
+            Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "tpu"
             continue
         end
         a = Reactant.to_rarray(a)
@@ -483,7 +485,7 @@ end
             [9.9 + 10.10im, 11.11 + 12.12im, -13.13 + -14.14im, -15.15 + -16.16im],
         ),
     ]
-        if contains(string(Reactant.devices()[1]), "TPU")
+        if Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "tpu"
             continue
         end
         a = Reactant.to_rarray(a)
@@ -841,7 +843,7 @@ end
             [9.9 + 10.10im, 11.11 + 12.12im, -13.13 + -14.14im, -15.15 + -16.16im],
         ),
     ]
-        if contains(string(Reactant.devices()[1]), "TPU")
+        if Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "tpu"
             continue
         end
         a = Reactant.to_rarray(a)

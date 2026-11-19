@@ -1,6 +1,6 @@
 using Reactant, Test, LinearAlgebra, FileCheck
 
-const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+const RunningOnTPU = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "tpu"
 
 raise_to_syrk(x, y) = 3 .* (x * transpose(x)) .+ 5 .* y
 raise_to_syrk2(x, y) = 3 .* (transpose(x) * x) .+ 5 .* y

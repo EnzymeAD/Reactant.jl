@@ -1,6 +1,6 @@
 using LinearAlgebra, Reactant, Test
 
-const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+const RunningOnTPU = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "tpu"
 
 solve_with_fact(f::F, A, b) where {F} = f(A) \ b
 function solve_with_fact_batched(

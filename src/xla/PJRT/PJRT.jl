@@ -12,5 +12,6 @@ include("Future.jl")
 include("Buffer.jl")
 include("AsyncBuffer.jl")
 include("LoadedExecutable.jl")
+include("Plugin/Plugin.jl")
 
 end

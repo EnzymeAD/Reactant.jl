@@ -169,6 +169,17 @@ struct SuffixMatch
 end
 Base.in(name::AbstractString, m::SuffixMatch) = endswith(name, m.suffix)
 
+struct SetMatch
+    set::Set{String}
+end
+Base.in(name::AbstractString, m::SetMatch) = name ∈ m.set
+
+struct OrMatch{A,B}
+    a::A
+    b::B
+end
+Base.in(name::AbstractString, m::OrMatch) = name ∈ m.a || name ∈ m.b
+
 function (@main)(argv)
     for (output, core_header, target_set) in targets
         output = joinpath(OUTPUT_DIR, output)
@@ -180,7 +191,9 @@ function (@main)(argv)
 
         options = load_options(joinpath(@__DIR__, "wrap-xla.toml"))
         options["general"]["output_file_path"] = output
-        options["codegen"]["field_access_method_list"] = SuffixMatch("_Args")
+        options["codegen"]["field_access_method_list"] = OrMatch(
+            SuffixMatch("_Args"), SetMatch(Set{String}(["PJRT_Program"]))
+        )
 
         args = Generators.get_default_args()
         include_path = let idx = findfirst(h -> endswith(h, core_header), headers)
