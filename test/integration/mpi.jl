@@ -407,6 +407,9 @@ end
 # with other MPI calls in between, so nothing fuses and each Irecv! is its own custom call.
 # The received buffers come out of the Irecv! (not the Wait), so the reads in the second
 # exchange can run before the first exchange's Waits
+#
+# Also Breaks with the NCCL backend: same reason as test below, but here with Waits instead of Waitalls
+# probably worth keeping both so bother lowerings are tested?
 @testset "Isend / Irecv! / Wait - chained two-sided exchanges" begin
     comm = MPI.COMM_WORLD
     rank = MPI.Comm_rank(comm)
@@ -445,3 +448,38 @@ end
     MPI.Barrier(comm)
 end
 
+# Breaks with the NCCL backend: legalize-mpi-to-nccl drops the tags, and NCCL matches
+# point-to-point messages between the same pair of ranks by posting order alone. With 2
+# ranks the west and east neighbours are the same rank (a periodic halo exchange), so
+# receives posted west-then-east get paired with the peer's sends posted west-then-east,
+# swapping the two halos. MPI matches by tag, so the CPU backend gets it right
+@testset "Isend / Irecv! / Waitall - two-sided exchange with the same peer" begin
+    comm = MPI.COMM_WORLD
+    rank = MPI.Comm_rank(comm)
+    peer = 1 - rank
+    tag = 10
+
+    # What I send west arrives in my peer's east halo, so send_west pairs with recv_east
+    # (tag + 1) and send_east pairs with recv_west (tag)
+    function two_sided_exchange!(send_west, send_east, recv_west, recv_east)
+        reqs = [
+            MPI.Irecv!(recv_west, peer, tag, comm),
+            MPI.Irecv!(recv_east, peer, tag + 1, comm),
+            MPI.Isend(send_west, peer, tag + 1, comm),
+            MPI.Isend(send_east, peer, tag, comm),
+        ]
+        MPI.Waitall(reqs)
+        return nothing
+    end
+
+    send_west = ConcreteRArray(fill(Float64(rank + 1), 5))
+    send_east = ConcreteRArray(fill(Float64(rank + 11), 5))
+    recv_west, recv_east = (ConcreteRArray(zeros(5)) for _ in 1:2)
+
+    @jit sync = true two_sided_exchange!(send_west, send_east, recv_west, recv_east)
+
+    @test Array(recv_west) == fill(peer + 11.0, 5)
+    @test Array(recv_east) == fill(peer + 1.0, 5)
+
+    MPI.Barrier(comm)
+end
