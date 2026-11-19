@@ -396,7 +396,6 @@ end
 # Assemble data from multiple arrays. Needed in distributed setting where each process wont
 # have enough host memory to hold all the arrays. We assume that the data is only provided
 # for all of the addressable devices.
-# TODO(#2257): Implement Padding for this version. A bit more finicky that the above case
 function ConcreteIFRTArray(
     data::Vector{Array{T,N}},
     array_size::Dims{N},
@@ -413,31 +412,17 @@ function ConcreteIFRTArray(
     all_devices = XLA.get_device.((client,), sharding.mesh.device_ids)
     ifrt_sharding = XLA.IFRT.Sharding(all_devices, hlo_sharding)
 
-    # Validate that all the slices are as we expected them to be
-    slices, _ = XLA.sharding_to_concrete_array_indices(
-        hlo_sharding, array_size, 0:(length(all_devices) - 1)
-    )
-    addressable_slices = [
-        slice for (slice, device) in zip(slices, all_devices) if XLA.is_addressable(device)
-    ]
-    for (i, slice) in enumerate(addressable_slices)
-        idx = findfirst(Base.Fix1(in, i), data_to_addressable_shard)
-        @assert idx !== nothing
-        @assert size(data[idx]) == length.(slice) "Expected data[$idx] to be at \
-                                                   $(slice), but got size \
-                                                   $(size(data[idx]))"
-    end
-
-    # Make the mapping 0-indexed
-    @inbounds for shard_idxs in data_to_addressable_shard
-        shard_idxs .-= 1
-    end
-    ifrt_array = XLA.IFRT.AsyncArray(
-        XLA.IFRT.Array(client, data, data_to_addressable_shard, array_size, ifrt_sharding),
-        nothing,
+    slices, ifrt_array, padding = Sharding.assemble_ifrt_array_with_padding(
+        client,
+        data,
+        array_size,
+        data_to_addressable_shard,
+        hlo_sharding,
+        all_devices,
+        ifrt_sharding,
     )
     return ConcreteIFRTArray{T,N}(
-        ifrt_array, array_size, Sharding.ShardInfo(sharding, slices)
+        ifrt_array, array_size, Sharding.ShardInfo(sharding, slices), padding
     )
 end
 
