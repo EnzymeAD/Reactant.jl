@@ -4,6 +4,8 @@ function ReactantCore.traced_if(
     return @opcall if_condition(cond, true_fn, false_fn, args; track_numbers)
 end
 
+ReactantCore.is_traced_bool(::TracedRNumber{Bool}) = true
+
 function ReactantCore.traced_call(f::Function, args...)
     return @opcall call(f, args...)
 end
