@@ -67,6 +67,11 @@ function __init__()
             (BLAS.@blasfunc(dsymm_), :enzymexla_blas_dsymm_),
             (BLAS.@blasfunc(csymm_), :enzymexla_blas_csymm_),
             (BLAS.@blasfunc(zsymm_), :enzymexla_blas_zsymm_),
+            # Cholesky (potrf)
+            (BLAS.@blasfunc(spotrf_), :enzymexla_lapack_spotrf_),
+            (BLAS.@blasfunc(dpotrf_), :enzymexla_lapack_dpotrf_),
+            (BLAS.@blasfunc(cpotrf_), :enzymexla_lapack_cpotrf_),
+            (BLAS.@blasfunc(zpotrf_), :enzymexla_lapack_zpotrf_),
         ]
             MLIR.API.EnzymeJaXMapSymbol(
                 enzymexla_name, Libdl.dlsym(libblastrampoline_handle, cname)
