@@ -472,10 +472,11 @@ end
 # Should break with CPU backend unless we use dag fusion (but haven't tested this).
 #
 # NCCL backend: 
-# Each rank posts recvs as (tag, tag + 1) and posts sends as (tag + 1, tag). 
-# But NCCL drops the tags, and thus requires both sides to post recvs and sends 
-# in matching tag order. MPI to NCCL legalization
-# does a stable sort by tag. This test stresses that canonicalization.
+#
+# Each rank posts recvs as (tag, tag + 1) and posts sends as (tag + 1, tag). But NCCL
+# drops the tags, and thus requires both sides to post recvs and sends in matching tag
+# order. MPI to NCCL legalization does a stable sort by tag. This test stresses that
+# canonicalization.
 @testset "Isend / Irecv! / Waitall - two-sided exchange with the same peer" begin
     comm = MPI.COMM_WORLD
     rank = MPI.Comm_rank(comm)
