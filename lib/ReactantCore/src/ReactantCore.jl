@@ -10,7 +10,8 @@ export @annotate,
     MissingTracedValue,
     promote_to_traced,
     Periodic,
-    Binomial
+    Binomial,
+    Online
 
 """
     Periodic(n::Int)
@@ -54,6 +55,29 @@ end
     ACM Transactions on Mathematical Software (TOMS), 26(1), 19-45.
 """
 struct Binomial
+    budget::Int
+end
+
+"""
+    ReactantCore.Online(budget::Int)
+
+Checkpointing strategy for traced loops that uses the Stumm-Walther Online_r2
+algorithm [1] for loops whose trip count is unknown before the loop starts.
+A fixed `budget` of checkpoints is allocated; the algorithm places them
+adaptively as the loop runs.
+
+```julia
+# Online checkpointing with budget=10 for a while loop with unknown trip count
+@trace checkpointing=Online(10) while sim.running
+    time_step!(sim)
+end
+```
+
+[1] Stumm, P., & Walther, A. (2010).
+    New algorithms for optimal online checkpointing.
+    SIAM Journal on Scientific Computing, 32(2), 836-854.
+"""
+struct Online
     budget::Int
 end
 
@@ -505,8 +529,8 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
     if checkpointing === true && first_arg === nothing
         # This is a raw while loop (not from trace_for), require Periodic(n)
         error(
-            "Reactant.Periodic(n) or Reactant.Binomial(n) must be used for while loops when checkpointing is enabled. " *
-            "Use `@trace checkpointing=Reactant.Periodic(n) while ...` where n is the number of checkpoints.",
+            "Reactant.Periodic(n), Reactant.Binomial(n), or Reactant.Online(n) must be used for while loops when checkpointing is enabled. " *
+            "Use `@trace checkpointing=Reactant.Online(n) while ...` for loops with unknown trip count.",
         )
     end
 
