@@ -403,13 +403,32 @@ end
     MPI.Barrier(comm)
 end
 
-# Breaks with fuse-jit{dag=true adjacent=false}: the requests are waited on one at a time,
-# with other MPI calls in between, so nothing fuses and each Irecv! is its own custom call.
-# The received buffers come out of the Irecv! (not the Wait), so the reads in the second
-# exchange can run before the first exchange's Waits
+# CPU backend failure:
 #
-# Also Breaks with the NCCL backend: same reason as test below, but here with Waits instead of Waitalls
-# probably worth keeping both so bother lowerings are tested?
+# Since received buffers come out of the Irecv! (not the Wait), the reads in the second
+# exchange can run before the first exchange's Waits complete.
+# fuse-jit{dag=true adjacent=false} doesn't fix this - since there are other MPI calls
+# between each dag-connected pair, Irecvs and Waits don't fuse.
+#
+# Also breaks with the NCCL backend, in two stages:
+#
+# 1. Compile error ("mpi.wait is not in a form supported by MPI-to-NCCL legalization").
+#    The problem is overlapping request scopes, which we don't support:
+#    legalize-mpi-to-nccl's FoldMpiWaitOp only folds an Isend/Irecv! + Wait pair into a
+#    blocking send/recv when no other comm op sits between the request producer and its
+#    Wait. Here all four requests are posted before any Wait, so every Wait has other comm
+#    ops in between and none of them fold. Folding them one at a time would be wrong anyway:
+#    the first Irecv! would become a blocking recv ahead of every send, and both ranks would
+#    deadlock. Overlapping requests have to lower to a single nccl.group, which only
+#    FoldMpiWaitallOp builds. A possible fix is to merge runs of adjacent Waits into one
+#    Waitall before folding.
+#
+# 2. Once that's fixed, expect wrong results for the same reason as the test below: tags are
+#    dropped, and NCCL pairs west1/east1 with the peer's sends by posting order, so the halos
+#    come out swapped.
+#
+# Worth keeping both this test and the one below so the Wait and Waitall lowerings are both
+# covered
 @testset "Isend / Irecv! / Wait - chained two-sided exchanges" begin
     comm = MPI.COMM_WORLD
     rank = MPI.Comm_rank(comm)
@@ -448,11 +467,16 @@ end
     MPI.Barrier(comm)
 end
 
+# Should break with CPU backend unless we use dag fusion (but haven't tested this).
 # Breaks with the NCCL backend: legalize-mpi-to-nccl drops the tags, and NCCL matches
 # point-to-point messages between the same pair of ranks by posting order alone. With 2
 # ranks the west and east neighbours are the same rank (a periodic halo exchange), so
 # receives posted west-then-east get paired with the peer's sends posted west-then-east,
-# swapping the two halos. MPI matches by tag, so the CPU backend gets it right
+# swapping the two halos. MPI matches by tag, so the CPU backend gets it right.
+# Concretely: each rank posts recvs as (tag, tag + 1) but sends as (tag + 1, tag), so under
+# NCCL recv_west gets the peer's send_west, and the two @tests below fail with recv_west
+# and recv_east swapped. Unlike the Wait version above, this one compiles: the Waitall
+# folds into a single nccl.group
 @testset "Isend / Irecv! / Waitall - two-sided exchange with the same peer" begin
     comm = MPI.COMM_WORLD
     rank = MPI.Comm_rank(comm)
