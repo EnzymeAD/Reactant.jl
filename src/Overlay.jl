@@ -181,6 +181,92 @@ for randfun in (:rand, :randn, :randexp)
     end
 end
 
+const OverlaySamplerSpec = Union{
+    TracedRandom.BuiltinSampler,Random.FloatInterval,AbstractArray,Tuple,AbstractSet
+}
+
+@reactant_overlay function Base.rand(rng::AbstractRNG, X::OverlaySamplerSpec)
+    @static if isdefined(Random, :SeedHasher)
+        if rng isa Random.SeedHasher
+            return call_with_native(Base.rand, rng, X)
+        end
+    end
+    if call_with_native(TracedRandom.can_overlay_sampler, X)
+        return call_with_native(TracedRandom.overload_rand_sampler, rng, X)
+    end
+    @warn "Reactant doesn't support sampling of $(typeof(X)) with the current \
+           interpreter. Falling back to native interpreter." maxlog = 1
+    return call_with_native(Base.rand, rng, X)
+end
+
+@reactant_overlay function Base.rand(rng::AbstractRNG, X::OverlaySamplerSpec, dims::Dims)
+    @static if isdefined(Random, :SeedHasher)
+        if rng isa Random.SeedHasher
+            return call_with_native(Base.rand, rng, X, dims)
+        end
+    end
+    if call_with_native(TracedRandom.can_overlay_sampler, X; array=true)
+        return call_with_native(TracedRandom.overload_rand_sampler, rng, X, dims)
+    end
+    @warn "Reactant doesn't support sampling of $(typeof(X)) with the current \
+           interpreter. Falling back to native interpreter." maxlog = 1
+    return call_with_native(Base.rand, rng, X, dims)
+end
+
+@reactant_overlay function Random.rand!(
+    rng::AbstractRNG, A::AbstractArray, ::Type{X}
+) where {X}
+    if A isa AnyTracedRArray
+        if unwrapped_eltype(X) <: ReactantPrimitive
+            return call_with_native(
+                TracedRandom.overload_rand_sampler!, rng, A, unwrapped_eltype(X)
+            )
+        end
+        @warn "Reactant doesn't support sampling of $(X) with the current \
+               interpreter. Falling back to native interpreter." maxlog = 1
+        return call_with_native(Random.rand!, rng, A, X)
+    elseif !(rng isa ReactantRNG) && !use_overlayed_version(A)
+        return call_with_native(Random.rand!, rng, A, X)
+    else
+        sp = call_with_reactant(Random.Sampler, rng, X)
+        return call_with_reactant(Random.rand!, rng, A, sp)
+    end
+end
+
+@reactant_overlay function Random.rand!(
+    rng::AbstractRNG, A::AbstractArray, sp::Random.Sampler
+)
+    if A isa AnyTracedRArray
+        if call_with_native(TracedRandom.can_overlay_sampler, sp; array=true)
+            return call_with_native(TracedRandom.overload_rand_sampler!, rng, A, sp)
+        end
+        return call_with_native(Random.rand!, rng, A, sp)
+    elseif !(rng isa ReactantRNG) && !use_overlayed_version(A) && !use_overlayed_version(sp)
+        return call_with_native(Random.rand!, rng, A, sp)
+    else
+        for i in eachindex(A)
+            @inbounds A[i] = call_with_reactant(Base.rand, rng, sp)
+        end
+        return A
+    end
+end
+
+@reactant_overlay function Random.rand!(rng::AbstractRNG, A::AbstractArray, X)
+    if A isa AnyTracedRArray
+        if call_with_native(TracedRandom.can_overlay_sampler, X; array=true)
+            return call_with_native(TracedRandom.overload_rand_sampler!, rng, A, X)
+        end
+        @warn "Reactant doesn't support sampling of $(typeof(X)) with the current \
+               interpreter. Falling back to native interpreter." maxlog = 1
+        return call_with_native(Random.rand!, rng, A, X)
+    elseif !(rng isa ReactantRNG) && !use_overlayed_version(A) && !use_overlayed_version(X)
+        return call_with_native(Random.rand!, rng, A, X)
+    else
+        sp = call_with_reactant(Random.Sampler, rng, X)
+        return call_with_reactant(Random.rand!, rng, A, sp)
+    end
+end
+
 # LinearAlgebra.jl overloads
 ## `mul!` goes through too many layers of abstractions and we aren't able to overload
 ## without specializing on every possible combination of types
