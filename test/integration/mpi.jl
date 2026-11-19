@@ -365,3 +365,83 @@ end
         end
     end
 end
+
+# Breaks with fuse-jit{dag=false, adjacent=true}. Turning on dag=true fixes it,
+# but is only a stopgap solution in my mind - the only reason that works is bc 
+# dag fusion runs before adjacent fusion. Also neither fusion pass should be relied on
+# for correct code imo, or ever produce bad code, even if it's not a case we expect to hit in 
+# practice.
+@testset "Isend / Irecv! / Waitall - chained exchanges" begin
+    comm = MPI.COMM_WORLD
+    rank = MPI.Comm_rank(comm)
+    peer = 1 - rank
+
+    function exchange!(send_buf, recv_buf, tag)
+        reqs = [MPI.Irecv!(recv_buf, peer, tag, comm), MPI.Isend(send_buf, peer, tag, comm)]
+        MPI.Waitall(reqs)
+        return nothing
+    end
+
+    # Each exchange sends what the previous one received, so every received buffer must be
+    # read only after its Waitall
+    function chained_exchanges!(x, recv1, recv2, recv3)
+        exchange!(x, recv1, 42)
+        exchange!(recv1 .+ 1, recv2, 43)
+        exchange!(recv2 .+ 1, recv3, 44)
+        return nothing
+    end
+
+    x = ConcreteRArray(fill(Float64(rank + 1), 5))
+    recv1, recv2, recv3 = (ConcreteRArray(zeros(5)) for _ in 1:3)
+
+    @jit sync = true chained_exchanges!(x, recv1, recv2, recv3)
+
+    @test Array(recv1) == fill(peer + 1.0, 5)
+    @test Array(recv2) == fill(rank + 2.0, 5)
+    @test Array(recv3) == fill(peer + 3.0, 5)
+
+    MPI.Barrier(comm)
+end
+
+# Breaks with fuse-jit{dag=true adjacent=false}: the requests are waited on one at a time,
+# with other MPI calls in between, so nothing fuses and each Irecv! is its own custom call.
+# The received buffers come out of the Irecv! (not the Wait), so the reads in the second
+# exchange can run before the first exchange's Waits
+@testset "Isend / Irecv! / Wait - chained two-sided exchanges" begin
+    comm = MPI.COMM_WORLD
+    rank = MPI.Comm_rank(comm)
+    peer = 1 - rank
+
+    # Post both receives, then both sends, then wait on each request separately
+    function two_sided_exchange!(send_west, send_east, recv_west, recv_east, tag)
+        recv_west_req = MPI.Irecv!(recv_west, peer, tag, comm)
+        recv_east_req = MPI.Irecv!(recv_east, peer, tag + 1, comm)
+        send_west_req = MPI.Isend(send_west, peer, tag + 1, comm)
+        send_east_req = MPI.Isend(send_east, peer, tag, comm)
+        MPI.Wait(recv_west_req)
+        MPI.Wait(send_west_req)
+        MPI.Wait(recv_east_req)
+        MPI.Wait(send_east_req)
+        return nothing
+    end
+
+    # The second exchange sends what the first one received
+    function chained_two_sided_exchanges!(x, west1, east1, west2, east2)
+        two_sided_exchange!(x, x .+ 10, west1, east1, 10)
+        two_sided_exchange!(west1 .+ 1, east1 .+ 1, west2, east2, 20)
+        return nothing
+    end
+
+    x = ConcreteRArray(fill(Float64(rank + 1), 5))
+    west1, east1, west2, east2 = (ConcreteRArray(zeros(5)) for _ in 1:4)
+
+    @jit sync = true chained_two_sided_exchanges!(x, west1, east1, west2, east2)
+
+    @test Array(west1) == fill(peer + 11.0, 5)
+    @test Array(east1) == fill(peer + 1.0, 5)
+    @test Array(west2) == fill(rank + 2.0, 5)
+    @test Array(east2) == fill(rank + 12.0, 5)
+
+    MPI.Barrier(comm)
+end
+
