@@ -361,16 +361,39 @@ function overload_autodiff(
     return overload_autodiff(mode, f, infer_activity(mode, f, args...), args...)
 end
 
+unalias_active(x::TracedRNumber) = copy(x)
+unalias_active(x::Tuple) = map(unalias_active, x)
+unalias_active(x::NamedTuple) = map(unalias_active, x)
+function unalias_active(x::T) where {T}
+    isbitstype(T) && return x
+    nf = nfields(x)
+    nf == 0 && return x
+    if !ismutabletype(T)
+        flds = Vector{Any}(undef, nf)
+        for i in 1:nf
+            if isdefined(x, i)
+                flds[i] = unalias_active(getfield(x, i))
+            else
+                nf = i - 1
+                break
+            end
+        end
+        return ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), T, flds, nf)::T
+    end
+    return deepcopy(x)
+end
+
 function overload_autodiff(
-    ::CMode, f::FA, ::Type{A}, args::Vararg{Annotation,Nargs}
+    ::CMode, f::FA, ::Type{A}, raw_args::Vararg{Annotation,Nargs}
 ) where {CMode<:Mode,FA<:Annotation,A<:Annotation,Nargs}
     reverse = CMode <: ReverseMode
 
-    width = Enzyme.same_or_one(1, args...)
+    width = Enzyme.same_or_one(1, raw_args...)
     if width == 0
         throw(ErrorException("Cannot differentiate with a batch size of 0"))
     end
 
+    args = map(a -> a isa Active ? Active(unalias_active(a.val)) : a, raw_args)
     primf = f.val
     primargs = ((v.val for v in args)...,)
 
@@ -501,7 +524,11 @@ function overload_autodiff(
                 idx, path = TracedUtils.get_argidx(a, argprefix)
                 arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
 
-                act = leaf_act(arg, a, reverse, true)
+                act = if arg isa Active
+                    act_from_type(Const, reverse, true)
+                else
+                    leaf_act(arg, a, reverse, true)
+                end
                 push!(ret_activity, act)
 
                 if act == EnzymeActivity.OUT || act == EnzymeActivity.OUT_NO_NEED
@@ -618,7 +645,11 @@ function overload_autodiff(
                 arg.val, path[3:end], TracedUtils.transpose_val(MLIR.IR.result(res, residx))
             )
             residx += 1
-            act = leaf_act(arg, a, reverse, true)
+            act = if arg isa Active
+                act_from_type(Const, reverse, true)
+            else
+                leaf_act(arg, a, reverse, true)
+            end
             if CMode <: ForwardMode &&
                 act != EnzymeActivity.CONST &&
                 act != EnzymeActivity.CONST_NO_NEED
@@ -637,7 +668,6 @@ function overload_autodiff(
         end
     end
 
-    restup = Any[(a isa Active) ? copy(a) : nothing for a in args]
     for a in linear_args
         idx, path = TracedUtils.get_argidx(a, argprefix)
 
@@ -660,10 +690,14 @@ function overload_autodiff(
     end
 
     if reverse
+        restup = ntuple(Val(Nargs)) do i
+            Base.@_inline_meta
+            args[i] isa Active ? args[i].val : nothing
+        end
         if EnzymeCore.needs_primal(CMode)
-            return ((restup...,), result)
+            return (restup, result)
         else
-            return ((restup...,),)
+            return (restup,)
         end
     else
         if EnzymeCore.needs_primal(CMode)

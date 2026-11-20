@@ -897,3 +897,107 @@ jac_vec_3296(θ, p) = Enzyme.jacobian(Forward, Const(co_vec_3296), θ, p)
     @test Array(j1) ≈ j1_ref
     @test Array(j2) ≈ j2_ref
 end
+
+function active_plus_primal(x)
+    ((dx,),) = Enzyme.autodiff(Reverse, abs2, Active, Active(x))
+    return dx + x
+end
+
+f_two(a, b) = a * b^2
+
+function two_active_same_val(x)
+    ((dx1, dx2),) = Enzyme.autodiff(Reverse, f_two, Active, Active(x), Active(x))
+    return dx1, dx2, x
+end
+
+function active_and_const_same_val(x)
+    ((dx1, dx2),) = Enzyme.autodiff(Reverse, f_two, Active, Active(x), Const(x))
+    return dx1, dx2, x
+end
+
+struct ActivePair3599{T}
+    a::T
+    b::T
+end
+
+f_pair_3599(p::ActivePair3599) = p.a^2 + 3 * p.b
+
+function fwd_aliased_scalar_return(x)
+    y = sin(x)
+    return (y, y)
+end
+
+@testset "Reverse-mode Active traced scalar arguments: Issue #3599" begin
+    res_real = @jit Enzyme.autodiff(Reverse, abs2, Active(Reactant.ConcreteRNumber(3.0)))
+    @test res_real isa Tuple{Tuple{<:ConcreteRNumber{Float64}}}
+    @test only(only(res_real)) ≈ 6.0
+
+    res_primal = @jit Enzyme.autodiff(
+        ReverseWithPrimal, abs2, Active(Reactant.ConcreteRNumber(3.0))
+    )
+    @test only(res_primal[1]) ≈ 6.0
+    @test res_primal[2] ≈ 9.0
+
+    res_id_primal = @jit Enzyme.autodiff(
+        ReverseWithPrimal, identity, Active, Active(Reactant.ConcreteRNumber(3.0))
+    )
+    @test only(res_id_primal[1]) ≈ 1.0
+    @test res_id_primal[2] ≈ 3.0
+
+    z = 1.0 + 1.0im
+    res_complex = @jit Enzyme.autodiff(
+        Reverse, imag ∘ exp, Active(Reactant.ConcreteRNumber(z))
+    )
+    expected_complex = only(only(Enzyme.autodiff(Reverse, imag ∘ exp, Active(z))))
+    @test only(only(res_complex)) ≈ expected_complex
+
+    # Ensure set_act! does not overwrite the caller's primal input x with the gradient dx
+    res_keep_primal = @jit active_plus_primal(Reactant.ConcreteRNumber(3.0))
+    @test res_keep_primal ≈ 9.0
+
+    # Two Active arguments referencing the same value Active(x), Active(x)
+    x_same = Reactant.ConcreteRNumber(3.0)
+    res_two_same = @jit two_active_same_val(x_same)
+    @test res_two_same[1] ≈ 9.0
+    @test res_two_same[2] ≈ 18.0
+    @test res_two_same[3] ≈ 3.0
+
+    res_two_same_direct = @jit Enzyme.autodiff(
+        Reverse, f_two, Active, Active(x_same), Active(x_same)
+    )
+    @test res_two_same_direct[1][1] ≈ 9.0
+    @test res_two_same_direct[1][2] ≈ 18.0
+
+    res_active_const = @jit active_and_const_same_val(x_same)
+    @test res_active_const[1] ≈ 9.0
+    @test res_active_const[2] === nothing
+    @test res_active_const[3] ≈ 3.0
+
+    f_tup(t) = t[1]^2 + 3 * t[2]
+    res_tup = @jit Enzyme.autodiff(
+        Reverse,
+        f_tup,
+        Active((Reactant.ConcreteRNumber(4.0), Reactant.ConcreteRNumber(5.0))),
+    )
+    @test only(only(res_tup))[1] ≈ 8.0
+    @test only(only(res_tup))[2] ≈ 3.0
+
+    res_tup_same = @jit Enzyme.autodiff(Reverse, f_tup, Active((x_same, x_same)))
+    @test only(only(res_tup_same))[1] ≈ 6.0
+    @test only(only(res_tup_same))[2] ≈ 3.0
+
+    res_struct_same = @jit Enzyme.autodiff(
+        Reverse, f_pair_3599, Active(ActivePair3599(x_same, x_same))
+    )
+    @test only(only(res_struct_same)).a ≈ 6.0
+    @test only(only(res_struct_same)).b ≈ 3.0
+
+    # Ensure Base.deepcopy_internal on TracedRNumber preserves aliasing via stackdict
+    res_fwd_alias = @jit Enzyme.autodiff(
+        Forward,
+        fwd_aliased_scalar_return,
+        Duplicated(Reactant.ConcreteRNumber(0.7), Reactant.ConcreteRNumber(1.0)),
+    )
+    @test only(res_fwd_alias)[1] ≈ cos(0.7)
+    @test only(res_fwd_alias)[2] ≈ cos(0.7)
+end
