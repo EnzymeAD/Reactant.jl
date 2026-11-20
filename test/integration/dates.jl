@@ -247,6 +247,27 @@ advance(dt, n) = dt + Dates.Millisecond(1000) * n
         @test Dates.monthday(d_r) == Dates.monthday(d)
     end
 
+    @testset "traced year accessors" begin
+        # leap years incl. the century rules, and both sides of a year boundary
+        for dt in (
+            Dates.DateTime(2013, 7, 15, 12),
+            Dates.DateTime(2024, 2, 29),
+            Dates.DateTime(2024, 12, 31, 23, 59, 59),
+            Dates.DateTime(2025, 1, 1),
+            Dates.DateTime(2000, 3, 1),
+            Dates.DateTime(1900, 12, 31),
+        )
+            dt_ra = Reactant.to_rarray(dt; track_numbers=Number)
+            @test @jit(Dates.year(dt_ra)) == Dates.year(dt)
+            @test @jit(Dates.isleapyear(dt_ra)) == Dates.isleapyear(dt)
+            @test @jit(Dates.daysinyear(dt_ra)) == Dates.daysinyear(dt)
+
+            d = Dates.Date(dt)
+            d_ra = Reactant.to_rarray(d; track_numbers=Number)
+            @test @jit(Dates.year(d_ra)) == Dates.year(d)
+        end
+    end
+
     @testset "hour, minute, second, millisecond accessors (DateTime)" begin
         dt = Dates.DateTime(2013, 7, 15, 12, 30, 45, 500)
         dt_r = convert(RDExt.ReactantDateTime, dt)
