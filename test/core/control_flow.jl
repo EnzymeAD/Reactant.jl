@@ -844,7 +844,7 @@ end
 end
 
 function for_default_checkpoints(x)
-    @trace checkpointing = true track_numbers = false for i in 1:100
+    @trace mincut = false checkpointing = true track_numbers = false for i in 1:100
         x = x .+ 1
     end
     return x
