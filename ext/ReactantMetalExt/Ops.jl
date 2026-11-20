@@ -1,5 +1,5 @@
 """
-    handle(::Val{opname}, graph::MPSGraph, operands::Tuple, attributes::NamedTuple, results::Tuple[, regions::Tuple])
+    handle(::Val{opname}, graph::MPSGraph, operands::Tuple, attributes::NamedTuple, results::Tuple[, regions::Tuple, vars::Dict])
 
 Add to `graph` the nodes that compute the MLIR op `opname` (e.g. `Symbol("stablehlo.add")`) and return the tensors of
 its results.
@@ -9,6 +9,8 @@ its results.
   dimensions, i.e. their memory is in the row-major order of MLIR.
 - `results`: the type of each result, as `(; eltype, size)` with `size` in MLIR order.
 - `regions`: the block of each region, for ops with regions.
+- `vars`: the tensors of the MLIR values, for ops with regions, which are translated by `codegen!(graph, block, vars)`.
+  Like in MLIR, the ops of a region can use the values of the enclosing blocks.
 
 Like MLIR values, the return value depends on the number of results: it is the tensor itself if there is one, and it
 must be a tuple with one tensor per result if there are several. Their shapes must be exactly the ones in `results`,
@@ -583,6 +585,147 @@ function handle(
     return length(operands) == 1 ? only(operands) : operands
 end
 
+# MPSGraph builds the loop by calling 2 blocks once: `before` computes the condition from the values of an iteration
+# and passes them on, to `after` if it holds and as the results otherwise, and `after` computes the next values.
+# A Julia exception can't unwind through MPSGraph, so an error in a region is rethrown once the loop is built, and
+# the blocks pass their arguments through meanwhile
+function handle(
+    ::Val{Symbol("stablehlo.while")},
+    graph::MPSGraph,
+    operands,
+    _,
+    results,
+    (cond, body),
+    vars,
+)
+    err = Ref{Any}(nothing)
+    # the second argument is an `NSMutableArray`, which has no wrapper
+    before = @objcblock(id{MPSGraphTensor}, (id{NSArray}, id{NSArray})) do inputs, outputs
+        @objc [outputs::id{NSArray} addObjectsFromArray:(inputs::id{NSArray})]::Nothing
+        try
+            for (i, t) in enumerate(convert(Vector{MPSGraphTensor}, NSArray(inputs)))
+                vars[IR.argument(cond, i).ref.ptr] = t
+            end
+            return only(codegen!(graph, cond, vars)).ptr
+        catch e
+            isnothing(err[]) && (err[] = e)
+            return MPSGraphs.constantWithScalar(graph, 0, Bool).ptr
+        end
+    end
+    after = @objcblock(id{NSArray}, (id{NSArray},)) do inputs
+        try
+            for (i, t) in enumerate(convert(Vector{MPSGraphTensor}, NSArray(inputs)))
+                vars[IR.argument(body, i).ref.ptr] = t
+            end
+            return NSArray(codegen!(graph, body, vars)).ptr
+        catch e
+            isnothing(err[]) && (err[] = e)
+            return inputs
+        end
+    end
+
+    outputs = @objc [
+        graph::id{MPSGraph} whileWithInitialInputs:(NSArray(collect(operands))::id{NSArray})
+        before:(before::id{NSBlock})
+        after:(after::id{NSBlock})
+        name:(nil::id{NSString})
+    ]::id{NSArray}
+    # the blocks keep their closures alive until they are released
+    release(before)
+    release(after)
+    isnothing(err[]) || throw(err[])
+
+    outputs = convert(Vector{MPSGraphTensor}, NSArray(outputs))
+    return length(results) == 1 ? only(outputs) : Tuple(outputs)
+end
+
+# MPSGraph builds the 2 branches of an `if` by calling a block for each, so `case` is a chain of them: branch 0 if
+# `index == 0`, and otherwise the `case` of the other branches with `index - 1`. Indices out of range end up in the
+# last branch, like in StableHLO. As in `stablehlo.while`, an error in a branch is rethrown once the `if` is built,
+# and the branch returns zeros meanwhile
+function handle(
+    ::Val{Symbol("stablehlo.case")}, graph::MPSGraph, (index,), _, results, branches, vars
+)
+    if length(branches) == 1
+        outputs = codegen!(graph, only(branches), vars)
+        return length(results) == 1 ? only(outputs) : Tuple(outputs)
+    end
+
+    err = Ref{Any}(nothing)
+    function zeros_()
+        return NSArray(
+            MPSGraphTensor[
+                MPSGraphs.broadcastTensor(
+                    graph,
+                    MPSGraphs.constantWithScalar(graph, 0, result.eltype),
+                    convert(MPSShape, result.size),
+                ) for result in results
+            ],
+        )
+    end
+    first_ = @objcblock(id{NSArray}, ()) do
+        try
+            return NSArray(codegen!(graph, first(branches), vars)).ptr
+        catch e
+            isnothing(err[]) && (err[] = e)
+            return zeros_().ptr
+        end
+    end
+    rest = @objcblock(id{NSArray}, ()) do
+        try
+            one_ = MPSGraphs.constantWithScalar(graph, 1, Int32)
+            next = handle(Val(Symbol("stablehlo.subtract")), graph, (index, one_), (;), ())
+            outputs = handle(
+                Val(Symbol("stablehlo.case")),
+                graph,
+                (next,),
+                (;),
+                results,
+                branches[2:end],
+                vars,
+            )
+            return NSArray(outputs isa Tuple ? MPSGraphTensor[outputs...] : [outputs]).ptr
+        catch e
+            isnothing(err[]) && (err[] = e)
+            return zeros_().ptr
+        end
+    end
+
+    # StableHLO indices are `si32`
+    zero_ = MPSGraphs.constantWithScalar(graph, 0, Int32)
+    pred = @objc [
+        graph::id{MPSGraph} equalWithPrimaryTensor:(index::id{MPSGraphTensor})
+        secondaryTensor:(zero_::id{MPSGraphTensor})
+        name:(nil::id{NSString})
+    ]::MPSGraphTensor
+    outputs = @objc [
+        graph::id{MPSGraph} ifWithPredicateTensor:(pred::id{MPSGraphTensor})
+        thenBlock:(first_::id{NSBlock})
+        elseBlock:(rest::id{NSBlock})
+        name:(nil::id{NSString})
+    ]::id{NSArray}
+    # the blocks keep their closures alive until they are released
+    release(first_)
+    release(rest)
+    isnothing(err[]) || throw(err[])
+
+    outputs = convert(Vector{MPSGraphTensor}, NSArray(outputs))
+    return length(results) == 1 ? only(outputs) : Tuple(outputs)
+end
+
+# `if` is a `case` with index 0 if the predicate holds and 1 otherwise
+function handle(
+    ::Val{Symbol("stablehlo.if")}, graph::MPSGraph, (pred,), _, results, branches, vars
+)
+    index = @objc [
+        graph::id{MPSGraph} notWithTensor:(pred::id{MPSGraphTensor}) name:(nil::id{NSString})
+    ]::MPSGraphTensor
+    index = MPSGraphs.castTensor(graph, index, Int32)
+    return handle(
+        Val(Symbol("stablehlo.case")), graph, (index,), (;), results, branches, vars
+    )
+end
+
 # executables run on a single device, as replica 0 of partition 0
 for op in ("partition_id", "replica_id")
     @eval function handle(
@@ -923,7 +1066,13 @@ end
 # sorts it ascending and `GT` or `GE` descending (the other way around with the arguments swapped). The other operands
 # follow the order of the key, which are gathered with its `argSort`
 function handle(
-    ::Val{Symbol("stablehlo.sort")}, graph::MPSGraph, operands, attributes, _, (comparator,)
+    ::Val{Symbol("stablehlo.sort")},
+    graph::MPSGraph,
+    operands,
+    attributes,
+    _,
+    (comparator,),
+    _,
 )
     ops = collect(comparator)
     args = [IR.argument(comparator, i).ref.ptr for i in 1:IR.nargs(comparator)]
@@ -1327,6 +1476,7 @@ function handle(
     attributes,
     (result,),
     (body,),
+    _,
 )
     length(operands) == 2 || throw(
         unimplemented(
@@ -1366,6 +1516,7 @@ function handle(
     attributes,
     (result,),
     (body,),
+    _,
 )
     length(operands) == 2 || throw(
         unimplemented(
@@ -1609,7 +1760,7 @@ end
 # first dimensions of the operand, and the dimensions of `updates` are the other ones of `indices` followed by the
 # rest of the operand
 function handle(
-    ::Val{Symbol("stablehlo.scatter")}, graph::MPSGraph, operands, attributes, _, (body,)
+    ::Val{Symbol("stablehlo.scatter")}, graph::MPSGraph, operands, attributes, _, (body,), _
 )
     length(operands) == 3 || throw(
         unimplemented(

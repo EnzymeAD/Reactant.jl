@@ -87,10 +87,11 @@ using Metal.MPSGraphs:
     MPSGraphShapedType,
     MPSGraphTensor,
     MPSGraphTensorData
-using ObjectiveC: @objc, id, nil
+using ObjectiveC: @objc, @objcblock, id, nil
 using ObjectiveC.Foundation:
     @autoreleasepool,
     NSArray,
+    NSBlock,
     NSData,
     NSDictionary,
     NSInteger,

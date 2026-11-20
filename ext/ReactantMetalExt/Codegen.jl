@@ -14,7 +14,8 @@ function tensor_type(type)
 end
 
 # each op becomes nodes of the graph through its handler, `handle(Val(opname), graph, operands, attributes, results)`.
-# ops with regions also get `regions`, a tuple with the block of each region.
+# ops with regions also get `regions`, a tuple with the block of each region, and `vars`, to translate them with
+# `codegen!`.
 # `codegen!` translates the ops of `block` into nodes of `graph` and returns the tensors of the operands of its
 # terminator. `vars` maps MLIR values to their tensors
 function codegen!(graph, block, vars)
@@ -34,7 +35,7 @@ function codegen_op!(graph, op, opname, operands, vars)
     signature = if isempty(regions)
         Tuple{typeof(opval),MPSGraph,Tuple,NamedTuple,Tuple}
     else
-        Tuple{typeof(opval),MPSGraph,Tuple,NamedTuple,Tuple,Tuple}
+        Tuple{typeof(opval),MPSGraph,Tuple,NamedTuple,Tuple,Tuple,Dict}
     end
     hasmethod(handle, signature) ||
         throw(unimplemented("`$opname` is not supported by `MetalClient`"))
@@ -52,7 +53,7 @@ function codegen_op!(graph, op, opname, operands, vars)
     tensors = if isempty(regions)
         handle(opval, graph, Tuple(operands), attributes, results)
     else
-        handle(opval, graph, Tuple(operands), attributes, results, regions)
+        handle(opval, graph, Tuple(operands), attributes, results, regions, vars)
     end
     if nres == 1
         vars[IR.result(op, 1).ref.ptr] = tensors
