@@ -437,7 +437,8 @@ function Base.div(
     ::typeof(RoundDown),
 ) where {T<:Integer}
     q = div(lhs, rhs)  # truncation (RoundToZero)
-    return q - (!iszero(rem(lhs, rhs)) & (signbit(lhs) != signbit(rhs)))
+    T <: Signed || return q
+    return q - (sign(rem(lhs, rhs)) == -sign(rhs))
 end
 function Base.div(
     @nospecialize(lhs::TracedRNumber{T}),
