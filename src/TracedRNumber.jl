@@ -24,7 +24,15 @@ Base.one(::TracedRNumber{T}) where {T} = Reactant.promote_to(TracedRNumber{T}, o
 Base.collect(x::TracedRNumber{T}) where {T} = TracedRArray{T,0}((), x.mlir_data, ())
 
 Base.copy(x::TracedRNumber{T}) where {T} = TracedRNumber{T}((), x.mlir_data)
-Base.deepcopy_internal(x::TracedRNumber, ::IdDict) = copy(x)
+
+function Base.deepcopy_internal(x::TracedRNumber, stackdict::IdDict)
+    if haskey(stackdict, x)
+        return stackdict[x]::typeof(x)
+    end
+    y = copy(x)
+    stackdict[x] = y
+    return y
+end
 
 Base.eps(::Type{TracedRNumber{T}}) where {T} = eps(T)
 Base.eps(x::TracedRNumber{T}) where {T} = eps(typeof(x))
