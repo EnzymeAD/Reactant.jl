@@ -1496,43 +1496,213 @@ function handle(
     return MPSGraphs.reshapeTensor(graph, c, convert(MPSShape, result.size))
 end
 
+# for some trivial reduction bodies (i.e. `add`, `multiply`, `maximum` and `minimum`), MPSGraph already provides kernels
+# but for more complex reductions, we manually unroll the reduction loop into a tree and parallelize each level of the
+# reduction tree with `enzyme-batch`
 function handle(
     ::Val{Symbol("stablehlo.reduce")},
     graph::MPSGraph,
     operands,
     attributes,
-    (result,),
+    results,
     (body,),
-    _,
+    vars,
 )
-    length(operands) == 2 || throw(
-        unimplemented(
-            "`stablehlo.reduce` of several tensors is not supported by `MetalClient`"
-        ),
-    )
-    a, init = operands
-    axes = NSArray(NSNumber.(attributes.dimensions))
+    n = length(results)
+    inputs, inits = collect(operands[1:n]), collect(operands[(n + 1):end])
+    dims = attributes.dimensions
 
-    opname = reducer(body)
+    # `reducer` fails on bodies with several ops, which are reduced by the tree
+    opname = try
+        n == 1 ? reducer(body) : nothing
+    catch e
+        e isa Plugin.Error || rethrow()
+        nothing
+    end
     reduced = if opname == "stablehlo.add"
-        MPSGraphs.reductionSumWithTensor(graph, a, axes)
+        MPSGraphs.reductionSumWithTensor(graph, only(inputs), NSArray(NSNumber.(dims)))
     elseif opname == "stablehlo.multiply"
-        MPSGraphs.reductionProductWithTensor(graph, a, axes)
+        MPSGraphs.reductionProductWithTensor(graph, only(inputs), NSArray(NSNumber.(dims)))
     elseif opname == "stablehlo.maximum"
-        MPSGraphs.reductionMaximumPropagateNaNWithTensor(graph, a, axes)
-    elseif opname == "stablehlo.minimum"
-        MPSGraphs.reductionMinimumPropagateNaNWithTensor(graph, a, axes)
-    else
-        throw(
-            unimplemented(
-                "`stablehlo.reduce` with `$opname` is not supported by `MetalClient`"
-            ),
+        MPSGraphs.reductionMaximumPropagateNaNWithTensor(
+            graph, only(inputs), NSArray(NSNumber.(dims))
         )
+    elseif opname == "stablehlo.minimum"
+        MPSGraphs.reductionMinimumPropagateNaNWithTensor(
+            graph, only(inputs), NSArray(NSNumber.(dims))
+        )
+    else
+        nothing
+    end
+    if !isnothing(reduced)
+        # MPSGraph keeps the reduced dimensions with size 1
+        reduced = MPSGraphs.reshapeTensor(
+            graph, reduced, convert(MPSShape, only(results).size)
+        )
+        return handle(Val(Symbol(opname)), graph, (only(inits), reduced), (;), results)
     end
 
-    # MPSGraph keeps the reduced dimensions with size 1
-    reduced = MPSGraphs.reshapeTensor(graph, reduced, convert(MPSShape, result.size))
-    return handle(Val(Symbol(opname)), graph, (init, reduced), (;), (result,))
+    slice =
+        (x, starts, limits) -> handle(
+            Val(Symbol("stablehlo.slice")),
+            graph,
+            (x,),
+            (; start_indices=starts, limit_indices=limits, strides=[1, 1]),
+            (),
+        )
+
+    shape = collect(size(first(inputs)))
+    kept = setdiff(0:(length(shape) - 1), dims)
+    rows, cols = prod(shape[dims .+ 1]; init=1), prod(shape[kept .+ 1]; init=1)
+    # the number of rows at each level
+    levels = Int[]
+    m = rows
+    while m > 1
+        push!(levels, m)
+        m = m ÷ 2 + isodd(m)
+    end
+
+    # `enzyme.batch` calls a function, so the body is copied to `@body` in a module of its own, where `@level_h` applies
+    # it to `h` pairs of rows (the last level and the combination with `init` have `h = 1`) through `enzyme.batch`,
+    # which `enzyme-batch` turns into ops on whole tensors
+    reduce_op = IR.parent_op(body)
+    ctx, loc = IR.context(reduce_op), IR.location(reduce_op)
+    mod = IR.Module(loc)
+    try
+        IR.@with_context ctx IR.@with_block IR.body(mod) begin
+            scalars = [IR.type(IR.argument(body, i)) for i in 1:n]
+            func = Dialects.func.func_(;
+                sym_name="body",
+                function_type=IR.FunctionType([scalars; scalars], scalars),
+                sym_visibility="private",
+                body=IR.Region(),
+                location=loc,
+            )
+            # MLIR can only copy whole ops, so the body is taken from a copy of the `stablehlo.reduce`
+            clone = copy(reduce_op)
+            API.mlirRegionTakeBody(IR.region(func, 1), IR.region(clone, 1))
+            IR.dispose(clone)
+            block = IR.first_block(IR.region(func, 1))
+
+            # the body can use values defined outside of it, like the constants hoisted by the canonicalizer, which
+            # are copied into it
+            ops, defined, blocks = IR.Operation[], Set{Ptr{Cvoid}}(), [block]
+            while !isempty(blocks)
+                b = pop!(blocks)
+                foreach(i -> push!(defined, IR.argument(b, i).ref.ptr), 1:IR.nargs(b))
+                for op in b
+                    push!(ops, op)
+                    foreach(
+                        i -> push!(defined, IR.result(op, i).ref.ptr), 1:IR.nresults(op)
+                    )
+                    foreach(region -> append!(blocks, region), op)
+                end
+            end
+            copies = Dict{Ptr{Cvoid},IR.Value}()
+            for op in ops, i in 1:IR.noperands(op)
+                value = IR.operand(op, i)
+                value.ref.ptr in defined && continue
+                def = IR.owner(value)
+                if !(def isa IR.Operation && IR.name(def) == "stablehlo.constant")
+                    msg = "`stablehlo.reduce` whose body uses values defined outside of it, other than constants,"
+                    throw(unimplemented("$msg is not supported by `MetalClient`"))
+                end
+                copied = get!(
+                    () -> IR.result(pushfirst!(block, copy(def))), copies, value.ref.ptr
+                )
+                IR.setoperand!(op, i, copied)
+            end
+
+            ret = IR.terminator(block)
+            IR.@with_block block Dialects.func.return_(IR.operands(ret); location=loc)
+            IR.dispose(ret)
+
+            for h in unique([levels .÷ 2; 1])
+                types = [IR.TensorType([h, cols], eltype(t)) for t in scalars]
+                entry = IR.Block([types; types], fill(loc, 2n))
+                IR.@with_block entry begin
+                    batched = Dialects.enzyme.batch(
+                        IR.Value[IR.argument(entry, i) for i in 1:(2n)];
+                        outputs=types,
+                        fn=IR.FlatSymbolRefAttribute("body"),
+                        batch_shape=IR.DenseArrayAttribute([h, cols]),
+                        location=loc,
+                    )
+                    Dialects.func.return_(IR.results(batched); location=loc)
+                end
+                region = IR.Region()
+                push!(region, entry)
+                Dialects.func.func_(;
+                    sym_name="level_$h",
+                    function_type=IR.FunctionType([types; types], types),
+                    body=region,
+                    location=loc,
+                )
+            end
+        end
+
+        pm = IR.PassManager(; context=ctx)
+        try
+            IR.add_pipeline!(IR.OpPassManager(pm), "enzyme-batch,inline,enzyme-hlo-opt,cse")
+            IR.run!(pm, mod)
+        catch e
+            msg = sprint(showerror, e)
+            throw(
+                unimplemented("the body of `stablehlo.reduce` could not be batched: $msg")
+            )
+        finally
+            IR.dispose(pm)
+        end
+        symbols = IR.SymbolTable(IR.Operation(mod))
+        level(h) = IR.first_block(IR.region(IR.lookup(symbols, "level_$h"), 1))
+
+        # the inputs are converted to the type of the results, which can be wider
+        xs = map(inputs, results) do x, r
+            if MPS.jl_mps_to_typ[x.dataType] != r.eltype
+                x = MPSGraphs.castTensor(graph, x, r.eltype)
+            end
+            x = permute(graph, x, [sort(dims); kept])
+            return MPSGraphs.reshapeTensor(graph, x, convert(MPSShape, [rows, cols]))
+        end
+        for m in levels
+            half, f = m ÷ 2, level(m ÷ 2)
+            for (i, x) in enumerate(xs)
+                x = isodd(m) ? slice(x, [0, 0], [2half, cols]) : x
+                x = MPSGraphs.reshapeTensor(graph, x, convert(MPSShape, [half, 2cols]))
+                vars[IR.argument(f, i).ref.ptr] = slice(x, [0, 0], [half, cols])
+                vars[IR.argument(f, n + i).ref.ptr] = slice(x, [0, cols], [half, 2cols])
+            end
+            ys = codegen!(graph, f, vars)
+            if isodd(m)
+                ys = map(ys, xs) do y, x
+                    last_ = slice(x, [m - 1, 0], [m, cols])
+                    attrs = (; dimension=0)
+                    return handle(
+                        Val(Symbol("stablehlo.concatenate")),
+                        graph,
+                        (y, last_),
+                        attrs,
+                        (),
+                    )
+                end
+            end
+            xs = ys
+        end
+
+        f = level(1)
+        for i in 1:n
+            vars[IR.argument(f, i).ref.ptr] = MPSGraphs.broadcastTensor(
+                graph, inits[i], convert(MPSShape, [1, cols])
+            )
+            vars[IR.argument(f, n + i).ref.ptr] = xs[i]
+        end
+        outputs = map(codegen!(graph, f, vars), results) do y, r
+            return MPSGraphs.reshapeTensor(graph, y, convert(MPSShape, r.size))
+        end
+        return n == 1 ? only(outputs) : Tuple(outputs)
+    finally
+        IR.dispose(mod)
+    end
 end
 
 # windows are reduced by the pooling of MPSGraph, which works on tensors of 4 dimensions

@@ -2,7 +2,7 @@ module ReactantMetalExt
 
 using Base: unsafe_convert
 using Reactant: Reactant
-using Reactant.MLIR: IR, API
+using Reactant.MLIR: IR, API, Dialects
 using Reactant.XLA: CAPI
 using Reactant.XLA.PJRT: Plugin
 using Reactant.Accelerators.JuliaCPU: decode_attribute
