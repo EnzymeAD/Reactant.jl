@@ -256,7 +256,7 @@ nothing # hide
 
 When performing computations in a loop using the [`@trace`](@ref) (see the [tutorial about Control Flow](@ref control-flow)), Enzyme has to save intermediary results during the primal computation to be used in the reverse pass.
 
-The [`@trace`](@ref) macro offers two parameters to limit the amount of memory that has to be saved. The first one in the `mincut` option which strictly reduces the amount of saved memory by saving only the minimal amount of memory needed for each iteration and recomputing variables if needed.
+The [`@trace`](@ref) macro offers two parameters to limit the amount of memory that has to be saved. The first one is the `mincut` option (enabled by default) which strictly reduces the amount of saved memory by saving only the minimal amount of memory needed for each iteration and recomputing variables if needed.
 
 Secondly, it is possible to enable the `checkpointing` option which will save intermediary loop carried values every $\sqrt{N}$ iterations and perform complete recomputation during the reverse pass. This is a way to trade compute time against memory.
 
