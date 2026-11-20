@@ -8,7 +8,8 @@ its results.
 - `attributes`: the op attributes, decoded by `decode_attribute`. Dense elements are Julia arrays with reversed
   dimensions, i.e. their memory is in the row-major order of MLIR.
 - `results`: the type of each result, as `(; eltype, size)` with `size` in MLIR order.
-- `regions`: the block of each region, for ops with regions.
+- `regions`: the block of each region, for ops with regions. For `func.call` and `stablehlo.composite`, the block of
+  the function they call.
 - `vars`: the tensors of the MLIR values, for ops with regions, which are translated by `codegen!(graph, block, vars)`.
   Like in MLIR, the ops of a region can use the values of the enclosing blocks.
 
@@ -735,6 +736,21 @@ function handle(
     return handle(
         Val(Symbol("stablehlo.case")), graph, (index,), (;), results, branches, vars
     )
+end
+
+# `func` is the body of the function named by the `callee` (`func.call`) or `decomposition` (`stablehlo.composite`)
+# attribute, which is inlined: its arguments are bound to the operands and its returned values are the results. The
+# function is isolated from above, so it only uses its arguments, and another op calling it rebinds them
+for op in ("func.call", "stablehlo.composite")
+    @eval function handle(
+        ::Val{Symbol($op)}, graph::MPSGraph, operands, _, results, (func,), vars
+    )
+        for (i, operand) in enumerate(operands)
+            vars[IR.argument(func, i).ref.ptr] = operand
+        end
+        outputs = codegen!(graph, func, vars)
+        return length(results) == 1 ? only(outputs) : Tuple(outputs)
+    end
 end
 
 # executables run on a single device, as replica 0 of partition 0

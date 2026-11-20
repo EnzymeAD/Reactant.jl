@@ -30,7 +30,28 @@ end
 
 function codegen_op!(graph, op, opname, operands, vars)
     opval = Val(Symbol(opname))
-    regions = Tuple(IR.first_block(IR.region(op, r)) for r in 1:IR.nregions(op))
+
+    # `func.call` and `stablehlo.composite` have no regions, but the function named by their `callee` and
+    # `decomposition` attributes is passed to their handler as if it were one
+    symattr = if opname == "func.call"
+        "callee"
+    elseif opname == "stablehlo.composite"
+        "decomposition"
+    else
+        nothing
+    end
+    regions = if !isnothing(symattr)
+        mod = IR.parent_op(op)
+        while IR.name(mod) != "builtin.module"
+            mod = IR.parent_op(mod)
+        end
+        callee = IR.flatsymbol(IR.getattr(op, symattr))
+        func = IR.lookup(IR.SymbolTable(mod), callee)
+        isnothing(func) && throw(invalid_argument("function `@$callee` not found"))
+        (IR.first_block(IR.region(func, 1)),)
+    else
+        Tuple(IR.first_block(IR.region(op, r)) for r in 1:IR.nregions(op))
+    end
 
     signature = if isempty(regions)
         Tuple{typeof(opval),MPSGraph,Tuple,NamedTuple,Tuple}
