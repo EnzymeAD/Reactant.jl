@@ -62,7 +62,7 @@ end
     for hlo in (@code_hlo(spmv(A_ra, x_ra)), @code_hlo(spmm(A_ra, B_ra)))
         @test @filecheck begin
             @check "stablehlo.custom_call"
-            @check "reactant_csr_matmul"
+            @check "enzymejax_sparse_csr_matmul_ffi"
             hlo
         end
         @test !contains(repr(hlo), "sparse_tensor")
@@ -73,7 +73,7 @@ end
     hlo = @code_hlo spmv_mul!(C_ra, A_ra, x_ra, 2.0, 3.0)
     @test @filecheck begin
         @check "stablehlo.custom_call"
-        @check "reactant_csr_matmul_acc"
+        @check "enzymejax_sparse_csr_matmul_acc_ffi"
         @check "output_operand_alias"
         hlo
     end
@@ -86,12 +86,12 @@ end
     hlo = @code_hlo spmv_mul!(C_ra, A_ra, x_ra, α_rn, β_rn)
     @test @filecheck begin
         @check "stablehlo.custom_call"
-        @check "reactant_csr_matmul"
+        @check "enzymejax_sparse_csr_matmul_ffi"
         @check "stablehlo.multiply"
         @check "stablehlo.add"
         hlo
     end
-    @test !contains(repr(hlo), "reactant_csr_matmul_acc")
+    @test !contains(repr(hlo), "enzymejax_sparse_csr_matmul_acc_ffi")
     @test !contains(repr(hlo), "sparse_tensor")
 end
 

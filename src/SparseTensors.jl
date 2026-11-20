@@ -6,8 +6,8 @@
 # `sparse_tensor.assemble` producing a `tensor<m x n x T, #sparse_tensor.encoding>`
 # value consumed by an `enzymexla.sparse.spmm` (alpha * A * B + beta * C). The
 # Enzyme-JAX `lower-enzymexla-sparse` pass rewrites that pair into a
-# `stablehlo.custom_call @reactant_csr_matmul[_acc]` handled by
-# cuSPARSE/hipSPARSE (see deps/ReactantExtra/xla_ffi.cpp) before XLA sees the
+# `stablehlo.custom_call @enzymejax_sparse_csr_matmul[_acc]_ffi` handled by
+# cuSPARSE/hipSPARSE (see src/enzyme_ad/jax/xla_ffi in Enzyme-JAX) before XLA sees the
 # sparse-encoded types; constant alpha/beta (e.g. the scalars of a 5-arg
 # `mul!`) are fused into a single library call.
 
