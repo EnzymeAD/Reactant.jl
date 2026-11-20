@@ -45,7 +45,6 @@ end
 
 # element-wise unary ops that are a node of the graph
 for (op, selector) in (
-    ("abs", :absoluteWithTensor),
     ("ceil", :ceilWithTensor),
     ("cosine", :cosWithTensor),
     ("exp2", :exponentBase2WithTensor),
@@ -71,6 +70,18 @@ for (op, selector) in (
             graph::id{MPSGraph} ($selector):(a::id{MPSGraphTensor}) name:(nil::id{NSString})
         ]::MPSGraphTensor
     end
+end
+
+function handle(::Val{Symbol("stablehlo.abs")}, graph::MPSGraph, (a,), _, _)
+    y = @objc [
+        graph::id{MPSGraph} absoluteWithTensor:(a::id{MPSGraphTensor}) name:(nil::id{NSString})
+    ]::MPSGraphTensor
+
+    # MPSGraphs's `absolute` kernel returns complex on complex operands
+    MPS.jl_mps_to_typ[a.dataType] <: Complex || return y
+    return @objc [
+        graph::id{MPSGraph} realPartOfTensor:(y::id{MPSGraphTensor}) name:(nil::id{NSString})
+    ]::MPSGraphTensor
 end
 
 # element-wise binary ops that are a node of the graph
