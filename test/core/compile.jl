@@ -40,6 +40,16 @@ end
         f = @compile identity(x)
         @test f(x) == x
     end
+
+    @testset "XLA client and device" begin
+        client = Reactant.XLA.default_backend()
+        device = Reactant.XLA.default_device(client)
+        x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 4))
+
+        res = @jit ((x, handles) -> (sum(x), handles))(x, (; client, device))
+        @test res[2].client === client
+        @test res[2].device == device
+    end
 end
 
 @testset "world-age" begin
@@ -667,4 +677,60 @@ end
     @test_throws "`@code_hlo` expects the original function, not a compiled `Thunk`." (@code_hlo rsum(
         x
     ))
+end
+
+_cwr_inv_f(x::Number) = x + 1
+_cwr_inv_f(x::Real) = x * 10
+
+@testset "call_with_reactant CallInfo & nested vararg closure rewrite" begin
+    # Compiling Base.Broadcast.flatten's nested inline vararg closures (#3339)
+    x_jl = rand(3)
+    a_jl = rand(3)
+    b = 0.9
+    x = Reactant.to_rarray(x_jl)
+    a = Reactant.to_rarray(a_jl)
+    bc_flat = Broadcast.flatten(
+        Broadcast.broadcasted(
+            +,
+            Broadcast.broadcasted(
+                +, x, Broadcast.broadcasted(+, a, Broadcast.broadcasted(-, 1, b))
+            ),
+            1.0,
+        ),
+    )
+    res_flat = Reactant.compile(Broadcast.BroadcastFunction(bc_flat.f), (bc_flat.args...,))(
+        bc_flat.args...
+    )
+    @test Array(res_flat) ≈ x_jl .+ (a_jl .+ (1 .- b)) .+ 1.0
+
+    # Direct CallWithReactant / call_with_reactant on inlineable methods & InvokeSignature
+    @inline inner_pair(p, q) = (p + q, p - q)
+    call_cwr(p, q) = Reactant.CallWithReactant(inner_pair)(p, q)
+    call_ert(p, q) = Reactant.call_with_reactant(
+        Reactant.EnsureReturnType{Tuple{Reactant.TracedRNumber{Float64},Any}}(),
+        inner_pair,
+        p,
+        q,
+    )
+    call_inv(p) = Reactant.call_with_reactant(
+        Reactant.EnsureReturnType{Any}(),
+        Reactant.InvokeSignature{Tuple{typeof(_cwr_inv_f),Number}}(),
+        _cwr_inv_f,
+        p,
+    )
+
+    # Nested inline vararg forwarding (`applyiterate_with_reactant` must not be double-rewritten)
+    @inline _inner_va(xs...) = +(xs...)
+    @inline _outer_va(w, ys...) = _inner_va(w, ys...)
+
+    p = ConcreteRNumber(3.0)
+    q = ConcreteRNumber(1.5)
+    s1, d1 = @jit call_cwr(p, q)
+    @test Float64(s1) ≈ 4.5
+    @test Float64(d1) ≈ 1.5
+    s2, d2 = @jit call_ert(p, q)
+    @test Float64(s2) ≈ 4.5
+    @test Float64(d2) ≈ 1.5
+    @test Float64(@jit call_inv(p)) ≈ 4.0
+    @test Float64(@jit _outer_va(p, q, p)) ≈ 7.5
 end

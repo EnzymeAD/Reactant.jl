@@ -311,6 +311,38 @@ function fold_impl!(
 end
 
 # Pooling
+
+# With `ceil_mode` (NNlib ≥ 0.9.53), the last window may run past the padded input: extend
+# the high padding by that overhang.
+function pool_padding(pdims::NNlib.PoolDims)
+    I, K = NNlib.input_size(pdims), NNlib.kernel_size(pdims)
+    S, D = NNlib.stride(pdims), NNlib.dilation(pdims)
+    padding = collect(NNlib.padding(pdims))
+    for (i, o) in enumerate(NNlib.output_size(pdims))
+        n = I[i] + padding[2i - 1] + padding[2i]
+        padding[2i] += max(0, (o - 1) * S[i] + D[i] * (K[i] - 1) + 1 - n)
+    end
+    return Tuple(padding)
+end
+
+# Number of positions of each window inside the input, or inside the padded input with
+# `count_include_pad` (so `ceil_mode` overhangs are never counted).
+function meanpool_divisor(pdims::NNlib.PoolDims, count_include_pad::Bool)
+    I, K = NNlib.input_size(pdims), NNlib.kernel_size(pdims)
+    S, D = NNlib.stride(pdims), NNlib.dilation(pdims)
+    P = NNlib.padding(pdims)
+    counts = map(enumerate(NNlib.output_size(pdims))) do (i, o)
+        lo, hi = count_include_pad ? (1 - P[2i - 1], I[i] + P[2i]) : (1, I[i])
+        return map(1:o) do j
+            start = (j - 1) * S[i] - P[2i - 1] + 1
+            first_k = max(0, cld(lo - start, D[i]))
+            last_k = min(K[i] - 1, fld(hi - start, D[i]))
+            return max(0, last_k - first_k + 1)
+        end
+    end
+    return prod.(Iterators.product(counts...))
+end
+
 function overloaded_maxpool!(
     y::AnyTracedRArray{T,N}, x::AnyTracedRArray{T2,N}, pdims::NNlib.PoolDims;
 ) where {T,T2,N}
@@ -320,7 +352,7 @@ function overloaded_maxpool!(
         init=typemin(T),
         dilation=NNlib.dilation(pdims),
         kernel_size=NNlib.kernel_size(pdims),
-        padding=NNlib.padding(pdims),
+        padding=pool_padding(pdims),
         stride=NNlib.stride(pdims),
     )
     set_mlir_data!(y, get_mlir_data(res))
@@ -328,7 +360,10 @@ function overloaded_maxpool!(
 end
 
 function overloaded_meanpool!(
-    y::AnyTracedRArray{T,N}, x::AnyTracedRArray{T2,N}, pdims::NNlib.PoolDims;
+    y::AnyTracedRArray{T,N},
+    x::AnyTracedRArray{T2,N},
+    pdims::NNlib.PoolDims;
+    count_include_pad::Bool=true,
 ) where {T,T2,N}
     res = reduce_window(
         +,
@@ -336,10 +371,17 @@ function overloaded_meanpool!(
         init=zero(T),
         dilation=NNlib.dilation(pdims),
         kernel_size=NNlib.kernel_size(pdims),
-        padding=NNlib.padding(pdims),
+        padding=pool_padding(pdims),
         stride=NNlib.stride(pdims),
     )
-    set_mlir_data!(y, get_mlir_data(res ./ T(prod(NNlib.kernel_size(pdims)))))
+    # Windows with no input element sum to zero, and NNlib returns zero for them.
+    divisor = max.(meanpool_divisor(pdims, count_include_pad), 1)
+    divisor = if allequal(divisor)
+        T(first(divisor))
+    else
+        Reactant.promote_to(TracedRArray{T,N}, reshape(T.(divisor), size(divisor)..., 1, 1))
+    end
+    set_mlir_data!(y, get_mlir_data(res ./ divisor))
     return y
 end
 
@@ -398,19 +440,21 @@ function NNlib.pad_constant(
 end
 
 # Gather
-function NNlib.gather!(dst::AnyTracedRArray, src::AnyTracedRArray, idxs::AbstractArray)
+function NNlib.gather!(
+    dst::AnyTracedRArray{T}, src::AnyTracedRArray, idxs::AbstractArray
+) where {T}
     n_dims = NNlib.scatter_dims(src, dst, idxs)
     res = _nnlib_gather_impl(src, _stack_indices(idxs), n_dims)
-    set_mlir_data!(dst, get_mlir_data(res))
+    set_mlir_data!(dst, get_mlir_data(Reactant.promote_to(TracedRArray{T}, res)))
     return dst
 end
 
 function NNlib.gather!(
-    dst::AnyTracedRArray, src::AnyTracedRArray, idxs::AbstractArray{<:Number}
-)
+    dst::AnyTracedRArray{T}, src::AnyTracedRArray, idxs::AbstractArray{<:Number}
+) where {T}
     n_dims = NNlib.scatter_dims(src, dst, idxs)
     res = _nnlib_gather_impl(src, reshape(idxs, 1, size(idxs)...), n_dims)
-    set_mlir_data!(dst, get_mlir_data(res))
+    set_mlir_data!(dst, get_mlir_data(Reactant.promote_to(TracedRArray{T}, res)))
     return dst
 end
 
@@ -424,6 +468,7 @@ function _stack_indices(idxs::AbstractArray{<:CartesianIndex})
 end
 
 function _nnlib_gather_impl(src::AnyTracedRArray, idxs::AbstractArray, n_dims::Int)
+    src = materialize_traced_array(src)
     return @opcall gather(
         src,
         Reactant.promote_to(TracedRArray, idxs);
@@ -468,7 +513,7 @@ function NNlib.scatter(
         )
     end
     xinit = isnothing(init) ? NNlib.scatter_empty(op, T) : init
-    dst = @opcall fill(xinit, dstsz)
+    dst = Reactant.promote_to(TracedRArray{T}, @opcall(fill(xinit, dstsz)))
 
     NNlib.scatter!(op, dst, src, idx)
     return dst
@@ -494,29 +539,25 @@ end
 
 for AT in (AbstractArray, AbstractArray{<:Number})
     @eval function NNlib.scatter!(
-        ::typeof(mean), dst::AnyTracedRArray, src::AnyTracedRArray, idx::$AT
-    )
+        ::typeof(mean), dst::AnyTracedRArray{T}, src::AnyTracedRArray, idx::$AT
+    ) where {T}
         Ns = NNlib.scatter!(+, zero(dst), one.(src), idx)
         dst_ = NNlib.scatter!(+, zero(dst), src, idx)
         res = dst .+ NNlib.safe_div.(dst_, Ns)
-        set_mlir_data!(dst, get_mlir_data(res))
+        set_mlir_data!(dst, get_mlir_data(Reactant.promote_to(TracedRArray{T}, res)))
         return dst
     end
 end
 
 function _nnlib_scatter_impl(
-    op::OP,
-    dst::AnyTracedRArray{T},
-    src::AnyTracedRArray{T},
-    idx::AbstractArray,
-    n_dims::Int,
+    op::OP, dst::AnyTracedRArray{T}, src::AnyTracedRArray, idx::AbstractArray, n_dims::Int
 ) where {OP,T}
     return @opcall(
         scatter(
             op,
-            [dst],
+            [materialize_traced_array(dst)],
             Reactant.promote_to(TracedRArray, idx),
-            [src];
+            [Reactant.promote_to(TracedRArray{T}, materialize_traced_array(src))];
             update_window_dims=collect(Int64, 1:n_dims),
             inserted_window_dims=collect(Int64, (n_dims + 1):ndims(dst)),
             input_batching_dims=Int64[],
@@ -537,4 +578,185 @@ function NNlib.maximum_dims(dims::AnyTracedRArray{NTuple{N,T}}) where {N,T}
 end
 function NNlib.maximum_dims(dims::AnyTracedRArray{CartesianIndex{N}}) where {N}
     return ntuple(i -> maximum(x -> x[i], dims), N)
+end
+
+function _to_traced_array(::Type{ElT}, x::AbstractArray) where {ElT}
+    if Reactant.ancestor(x) isa AnyTracedRArray
+        return Reactant.promote_to(TracedRArray{ElT,ndims(x)}, materialize_traced_array(x))
+    else
+        return Reactant.promote_to(TracedRArray{ElT,ndims(x)}, Array{ElT}(x))
+    end
+end
+
+# Scaled Dot-Product Attention
+function _prepare_attention_bias_or_mask(
+    ::Type{ElT}, x, target_sz::NTuple{4,Int}
+) where {ElT}
+    x === nothing && return nothing
+    ndims(x) <= 4 && all(i -> size(x, i) in (1, target_sz[i]), (1, 2, 3, 4)) || throw(
+        DimensionMismatch(
+            "A bias or mask of size $(size(x)) cannot be broadcast to the attention score dimensions $target_sz.",
+        ),
+    )
+    x_traced = _to_traced_array(ElT, x)
+    return materialize_traced_array(
+        reshape(x_traced, size(x, 1), size(x, 2), size(x, 3), size(x, 4))
+    )
+end
+
+function _prepare_attention_lengths(lengths, B::Int, max_len::Int)
+    lengths === nothing && return nothing
+    max_len_i32 = Int32(max_len)
+    zero_i32 = Int32(0)
+    if lengths isa Number
+        if lengths isa TracedRNumber
+            c = clamp(
+                Reactant.promote_to(TracedRNumber{Int32}, lengths), zero_i32, max_len_i32
+            )
+            return @opcall fill(c, (B,))
+        else
+            c = clamp(Int32(lengths), zero_i32, max_len_i32)
+            return @opcall fill(c, (B,))
+        end
+    else
+        length(lengths) == B || throw(
+            ArgumentError(
+                "Expected a sequence length for each of the $B sequences, got $(length(lengths)).",
+            ),
+        )
+        l_traced = materialize_traced_array(reshape(_to_traced_array(Int32, lengths), B))
+        return materialize_traced_array(clamp.(l_traced, zero_i32, max_len_i32))
+    end
+end
+
+if isdefined(NNlib, :attention_lengths)
+    function NNlib.attention_lengths(
+        x::AnyTracedRArray{<:Any,4}, lengths::Union{Number,AbstractArray}, n::Int=size(x, 4)
+    )
+        l_vec = _prepare_attention_lengths(lengths, n, size(x, 3))
+        return reshape(l_vec, (1, 1, 1, n))
+    end
+end
+
+if isdefined(NNlib, :_is_fused_attention)
+    function NNlib._is_fused_attention(
+        ::AnyTracedRArray{<:Any,4},
+        ::AnyTracedRArray{<:Any,4},
+        ::AnyTracedRArray{<:Any,4},
+        bias;
+        fdrop=identity,
+        mask=nothing,
+        scale=nothing,
+        is_causal=false,
+        window=nothing,
+        q_offset=0,
+        q_lengths=nothing,
+        kv_lengths=nothing,
+        segments=nothing,
+        kws...,
+    )
+        return fdrop === identity &&
+               window === nothing &&
+               is_causal isa Bool &&
+               (q_offset isa Integer && iszero(q_offset)) &&
+               segments === nothing &&
+               isempty(kws)
+    end
+end
+
+if isdefined(NNlib, :_scaled_dot_product_attention)
+    function NNlib._scaled_dot_product_attention(
+        q::AnyTracedRArray{Tq,4},
+        k::AnyTracedRArray{Tk,4},
+        v::AnyTracedRArray{Tv,4},
+        bias=nothing;
+        fdrop=identity,
+        mask=nothing,
+        scale=nothing,
+        is_causal::Union{Bool,Symbol}=false,
+        window=nothing,
+        q_offset=0,
+        q_lengths=nothing,
+        kv_lengths=nothing,
+        segments=nothing,
+        kws...,
+    ) where {Tq,Tk,Tv}
+        if !(
+            fdrop === identity &&
+            window === nothing &&
+            is_causal isa Bool &&
+            (q_offset isa Integer && iszero(q_offset)) &&
+            segments === nothing &&
+            isempty(kws)
+        )
+            if isdefined(NNlib, :generic_attention)
+                return NNlib.generic_attention(
+                    q,
+                    k,
+                    v,
+                    bias;
+                    fdrop,
+                    mask,
+                    scale,
+                    is_causal,
+                    window,
+                    q_offset,
+                    q_lengths,
+                    kv_lengths,
+                    segments,
+                    kws...,
+                    unsegmented=NNlib.unsegmented_attention,
+                )
+            elseif hasmethod(
+                NNlib._attention,
+                Tuple{typeof(q),typeof(k),typeof(v),typeof(bias)},
+                (:fdrop, :mask, :scale, :is_causal, :q_lengths, :kv_lengths),
+            )
+                x, _ = NNlib._attention(
+                    q, k, v, bias; fdrop, mask, scale, is_causal, q_lengths, kv_lengths
+                )
+                return x
+            else
+                x, _ = NNlib._attention(q, k, v, bias; fdrop, mask, scale, is_causal)
+                return x
+            end
+        end
+
+        T = promote_type(
+            Reactant.unwrapped_eltype(Tq),
+            Reactant.unwrapped_eltype(Tk),
+            Reactant.unwrapped_eltype(Tv),
+        )
+        q_traced = Reactant.promote_to(TracedRArray{T,4}, materialize_traced_array(q))
+        k_traced = Reactant.promote_to(TracedRArray{T,4}, materialize_traced_array(k))
+        v_traced = Reactant.promote_to(TracedRArray{T,4}, materialize_traced_array(v))
+
+        if scale isa TracedRNumber
+            s_traced = Reactant.promote_to(TracedRNumber{T}, scale)
+            q_traced = materialize_traced_array(q_traced .* s_traced)
+            scale_val = 1.0
+        elseif scale === nothing
+            scale_val = Float64(inv(sqrt(T(size(q, 1)))))
+        else
+            scale_val = Float64(T(scale))
+        end
+
+        score_sz = (size(k, 3), size(q, 3), size(q, 2), size(q, 4))
+        bias_traced = _prepare_attention_bias_or_mask(T, bias, score_sz)
+        mask_traced = _prepare_attention_bias_or_mask(Bool, mask, score_sz)
+        q_len_traced = _prepare_attention_lengths(q_lengths, size(q, 4), size(q, 3))
+        kv_len_traced = _prepare_attention_lengths(kv_lengths, size(k, 4), size(k, 3))
+
+        return @opcall attention(
+            q_traced,
+            k_traced,
+            v_traced,
+            bias_traced;
+            mask=mask_traced,
+            q_lengths=q_len_traced,
+            kv_lengths=kv_len_traced,
+            scale=scale_val,
+            is_causal,
+        )
+    end
 end

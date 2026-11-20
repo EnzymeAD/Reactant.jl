@@ -1,6 +1,7 @@
 module xla_autotuning
 
 include("../xla_tsl_dnn/xla_tsl_dnn.jl")
+include("../stream_executor_gpu/stream_executor_gpu.jl")
 include("../google/google.jl")
 
 include("autotuning_pb.jl")

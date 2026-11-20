@@ -50,6 +50,16 @@ The following environment variables can be used to configure Reactant.
 - `REACTANT_VISIBLE_GPU_DEVICES`: A comma-separated list of GPU device IDs to use. Defaults
   to all visible GPU devices. Preferably use `CUDA_VISIBLE_DEVICES` instead.
 
+### Logging
+
+- `TF_CPP_MIN_LOG_LEVEL`: The least severe XLA log messages to print: `0` for INFO, `1`
+  for WARNING (the default), `2` for ERROR and `3` for FATAL. Read when Reactant is loaded;
+  use [`Reactant.XLA.SetLogLevel`](@ref) to change the level afterwards.
+
+```@docs
+Reactant.XLA.SetLogLevel
+```
+
 ### TPU Configuration
 
 - `TPU_LIBRARY_PATH`: The path to the libtpu.so library. If not provided, we download and

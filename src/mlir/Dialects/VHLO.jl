@@ -1788,6 +1788,25 @@ function floor_v1(operand::Value; result::IR.Type, location=Location())
     )
 end
 
+function fma_v1(a::Value, b::Value, c::Value; result::IR.Type, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[a, b, c]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "vhlo.fma_v1",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function func_v1(;
     sym_name,
     function_type,

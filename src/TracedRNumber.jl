@@ -271,6 +271,23 @@ for (jlop, hloop) in (
     end
 end
 
+for jlop in (:(Base.:+), :(Base.:-))
+    @eval function $(jlop)(x::TracedRNumber{Bool}, y::TracedRNumber{Bool})
+        return $(jlop)(
+            Reactant.promote_to(TracedRNumber{Int}, x),
+            Reactant.promote_to(TracedRNumber{Int}, y),
+        )
+    end
+    @eval $(jlop)(x::TracedRNumber{Bool}) =
+        $(jlop)(Reactant.promote_to(TracedRNumber{Int}, x))
+end
+
+for (wrapop, jlop) in ((Symbol("+%"), :+), (Symbol("-%"), :-))
+    isdefined(Base, wrapop) || continue
+    @eval Base.$(wrapop)(x::TracedRNumber{Bool}, y::TracedRNumber{Bool}) = $(jlop)(x, y)
+    @eval Base.$(wrapop)(x::TracedRNumber{Bool}) = $(jlop)(x)
+end
+
 function Base.rem(x::TracedRNumber, y::TracedRNumber, ::typeof(Base.RoundFromZero))
     return ifelse(
         signbit(x) == signbit(y), rem(x, y, Base.RoundUp), rem(x, y, Base.RoundDown)
@@ -604,10 +621,18 @@ for (jlop, hloop, hlocomp) in (
 end
 
 function Base.ifelse(@nospecialize(pred::TracedRNumber{Bool}), x::Number, y::Number)
+    T1 = unwrapped_eltype(x)
+    T2 = unwrapped_eltype(y)
+    if T1 != T2
+        @warn "`ifelse` with different element-types in Reactant works by promoting the \
+                element-type to the common type. This is semantically different from the \
+                behavior of `ifelse` in Base. Use with caution" maxlog = 1
+    end
+    T = promote_type(T1, T2)
     return ifelse(
         pred,
-        Reactant.promote_to(TracedRNumber{unwrapped_eltype(x)}, x),
-        Reactant.promote_to(TracedRNumber{unwrapped_eltype(y)}, y),
+        Reactant.promote_to(TracedRNumber{T}, x),
+        Reactant.promote_to(TracedRNumber{T}, y),
     )
 end
 
@@ -807,6 +832,9 @@ Base.atand(x::TracedRNumber) = rad2deg(atan(x))
 
 Base.atan(y::TracedRNumber, x::TracedRNumber) = @opcall atan2(y, x)
 Base.atand(y::TracedRNumber, x::TracedRNumber) = rad2deg(atan(y, x))
+
+Base.angle(z::TracedRNumber{<:Complex}) = atan(imag(z), real(z))
+Base.angle(x::TracedRNumber{<:Real}) = atan(zero(x), x)
 
 Base.hypot(x::TracedRNumber{T}, y::TracedRNumber{T}) where {T} = @opcall hypot(x, y)
 Base.hypot(x::TracedRNumber{T}, y) where {T} = Base.hypot(x, Reactant.promote_to(x, y))
@@ -1015,7 +1043,7 @@ function (::Type{T})(x::TwicePrecision) where {T<:Reactant.TracedRNumber}
 end
 
 function (::Type{T})(x::TwicePrecision) where {T<:Reactant.ConcreteRNumber}
-    return Reactant.ConcreteRNumber(T(x.hi) - T(x.lo))::T
+    return Reactant.ConcreteRNumber(T(x.hi) + T(x.lo))::T
 end
 
 function Base.round(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer}
@@ -1026,6 +1054,12 @@ function Base.floor(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Inte
 end
 function Base.ceil(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer}
     return trunc(T, ceil(x))
+end
+function Base.ceil(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:AbstractFloat}
+    return @opcall convert(TracedRNumber{T}, ceil(x))
+end
+function Base.ceil(::Type{T}, x::TracedRNumber{<:Integer}) where {T<:Real}
+    return @opcall convert(TracedRNumber{T}, x)
 end
 
 # Concatenation. Numbers in Julia are handled in a much less generic fashion than arrays

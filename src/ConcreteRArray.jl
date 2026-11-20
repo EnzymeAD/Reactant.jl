@@ -48,8 +48,10 @@ end
 function Base.deepcopy_internal(
     x::Union{AbstractConcreteArray,AbstractConcreteNumber}, stackdict::IdDict
 )
-    haskey(stackdict, x) && return stackdict[x]
-    return deepcopy(x)
+    haskey(stackdict, x) && return stackdict[x]::typeof(x)
+    y = copy(x)
+    stackdict[x] = y
+    return y
 end
 
 Base.size(::AbstractConcreteNumber) = ()
@@ -70,10 +72,25 @@ end
 
 # Ensure the device and client are the same as the input
 for numType in (:ConcretePJRTNumber, :ConcreteIFRTNumber)
-    @eval function Base.float(x::$(numType){T}) where {T}
-        return $(numType)(
-            float(T)(to_number(x)); client=XLA.client(x), device=XLA.device(x), x.sharding
-        )
+    @eval begin
+        function Base.float(x::$(numType){T}) where {T}
+            return $(numType)(
+                float(T)(to_number(x));
+                client=XLA.client(x),
+                device=XLA.device(x),
+                x.sharding,
+            )
+        end
+        function Base.zero(x::$(numType){T}) where {T}
+            return $(numType)(
+                zero(T); client=XLA.client(x), device=XLA.device(x), x.sharding
+            )
+        end
+        function Base.one(x::$(numType){T}) where {T}
+            return $(numType)(
+                one(T); client=XLA.client(x), device=XLA.device(x), x.sharding
+            )
+        end
     end
 end
 
@@ -246,8 +263,38 @@ function Base.convert(
     return to_number(x)
 end
 
-for jlop in (:(Base.abs),), T in (AbstractConcreteNumber,)
-    @eval $(jlop)(x::$(T)) = $(jlop)(to_number(x))
+for jlop in (
+    :(Base.abs),
+    :(Base.abs2),
+    :(Base.:-),
+    :(Base.inv),
+    :(Base.sign),
+    :(Base.conj),
+    :(Base.imag),
+    :(Base.eps),
+    :(Base.sqrt),
+    :(Base.cbrt),
+    :(Base.exp),
+    :(Base.exp2),
+    :(Base.expm1),
+    :(Base.log),
+    :(Base.log2),
+    :(Base.log10),
+    :(Base.log1p),
+    :(Base.sin),
+    :(Base.cos),
+    :(Base.tan),
+    :(Base.sinh),
+    :(Base.cosh),
+    :(Base.tanh),
+    :(Base.asin),
+    :(Base.acos),
+    :(Base.atan),
+    :(Base.asinh),
+    :(Base.acosh),
+    :(Base.atanh),
+)
+    @eval $(jlop)(x::AbstractConcreteNumber) = $(jlop)(to_number(x))
 end
 
 for jlop in (
@@ -298,7 +345,15 @@ for T in (Integer, Rational)
 end
 Base.:^(::Irrational{:ℯ}, x::AbstractConcreteNumber) = exp(x)
 
-for jlop in (:(Base.isnan), :(Base.isfinite)),
+for jlop in (
+        :(Base.isnan),
+        :(Base.isfinite),
+        :(Base.isinf),
+        :(Base.isinteger),
+        :(Base.signbit),
+        :(Base.iszero),
+        :(Base.isone),
+    ),
     T in (AbstractConcreteNumber, AbstractConcreteArray{<:Any,0})
 
     @eval $(jlop)(x::$(T)) = $(jlop)(to_number(x))
@@ -946,8 +1001,22 @@ for T in (Number, Integer)
     end
 end
 
-Base.isinf(x::ConcreteRNumber{T}) where {T} = Base.isinf(convert(T, x))
-Base.round(x::ConcreteRNumber{T}) where {T} = Base.round(convert(T, x))
+# Julia 1.10 has no generic rounding fallbacks for non-`Real` numbers, so define each form.
+# `T<:Number` avoids ambiguities with Base's `T>:Missing` methods.
+for jlop in (:(Base.round), :(Base.trunc), :(Base.floor), :(Base.ceil))
+    @eval begin
+        $(jlop)(x::AbstractConcreteNumber; kwargs...) = $(jlop)(to_number(x); kwargs...)
+        function $(jlop)(::Type{T}, x::AbstractConcreteNumber) where {T<:Number}
+            return $(jlop)(T, to_number(x))
+        end
+    end
+end
+function Base.round(x::AbstractConcreteNumber, r::RoundingMode; kwargs...)
+    return round(to_number(x), r; kwargs...)
+end
+function Base.round(::Type{T}, x::AbstractConcreteNumber, r::RoundingMode) where {T<:Number}
+    return round(T, to_number(x), r)
+end
 
 Base._parentsmatch(A::ConcreteIFRTArray, B::ConcreteIFRTArray) = A === B
 Base._parentsmatch(A::ConcretePJRTArray, B::ConcretePJRTArray) = A === B

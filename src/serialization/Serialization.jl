@@ -6,6 +6,7 @@ Implements serialization of Reactant compiled functions. Currently supported for
 """
 module Serialization
 
+using BFloat16s: BFloat16
 using ..Reactant: Reactant, Compiler
 
 serialization_supported(::Val) = false
@@ -21,6 +22,7 @@ const NUMPY_SIMPLE_TYPES = Dict(
     UInt32 => :uint32,
     UInt64 => :uint64,
     Float16 => :float16,
+    BFloat16 => :bfloat16,
     Float32 => :float32,
     Float64 => :float64,
     ComplexF16 => :complex32,
@@ -69,7 +71,7 @@ for deployemnt.
 ## Example
 
 ```julia
-using Reactant, PythonCall
+using Reactant
 
 function fn(x, y)
     return sin.(x) .+ cos.(y.x[1:2, :])

@@ -344,3 +344,57 @@ end
     cmp = @compile myfft(mp, xr)
     @test cmp(mp, xr) ≈ myfft(mp, x)
 end
+
+# https://github.com/EnzymeAD/Reactant.jl/issues/3259
+@testset "Reactant plans applied to concrete arrays" begin
+    # Use single precision: TPUs do not support double-precision FFTs.
+    x = Reactant.TestUtils.construct_test_array(ComplexF32, 4, 6)
+    xr = Reactant.TestUtils.construct_test_array(Float32, 4, 6)
+
+    @testset "Out-of-place $(plan)" for plan in
+                                        (FFTW.plan_fft, FFTW.plan_ifft, FFTW.plan_bfft)
+        p_r = Reactant.to_rarray(plan(x))
+        x_r = Reactant.to_rarray(x)
+        @test p_r * x_r ≈ plan(x) * x
+        @test Array(x_r) ≈ x
+        y_r = Reactant.to_rarray(zero(x))
+        mul!(y_r, p_r, x_r)
+        @test y_r ≈ plan(x) * x
+        @test_throws ArgumentError p_r * x
+    end
+
+    # `inv(plan_fft(x))` is an `AbstractFFTs.ScaledPlan` wrapping an inverse plan
+    @testset "Inverse of a plan (ScaledPlan)" begin
+        p = FFTW.plan_fft(x)
+        p_inv = inv(p)
+        @test p_inv isa AbstractFFTs.ScaledPlan
+        p_inv_r = Reactant.to_rarray(p_inv)
+        y_r = Reactant.to_rarray(p * x)
+        @test p_inv_r * y_r ≈ x
+        z_r = Reactant.to_rarray(zero(x))
+        mul!(z_r, p_inv_r, y_r)
+        @test z_r ≈ x
+    end
+
+    @testset "In-place $(plan!)" for plan! in
+                                     (FFTW.plan_fft!, FFTW.plan_ifft!, FFTW.plan_bfft!)
+        expected = plan!(copy(x)) * copy(x)
+        p_r = Reactant.to_rarray(plan!(copy(x)))
+        x_r = Reactant.to_rarray(x)
+        @test p_r * x_r ≈ expected
+        @test x_r ≈ expected
+    end
+
+    @testset "rfft / irfft / brfft" begin
+        p_r = Reactant.to_rarray(FFTW.plan_rfft(xr))
+        xr_r = Reactant.to_rarray(xr)
+        y = FFTW.rfft(xr)
+        @test p_r * xr_r ≈ y
+
+        y_r = Reactant.to_rarray(y)
+        for plan in (FFTW.plan_irfft, FFTW.plan_brfft)
+            pi_r = Reactant.to_rarray(plan(y, size(xr, 1)))
+            @test pi_r * y_r ≈ plan(y, size(xr, 1)) * y
+        end
+    end
+end

@@ -4,7 +4,7 @@ NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
 
 NSYNC_SHA256 = ""
 
-ENZYMEXLA_COMMIT = "75e50d4fbbacd80f39e100bcb798840e7bae5adc"
+ENZYMEXLA_COMMIT = "64be62be5f734384f9aa0bfb79a7ce44583842b0"
 
 ENZYMEXLA_SHA256 = ""
 
@@ -111,7 +111,11 @@ ml_toolchain_workspace()
 
 load("@enzyme_ad//third_party/jax:workspace.bzl", jax_workspace = "repo")
 
-jax_workspace([])
+jax_workspace([
+    """
+    sed -i.bak0 "s,//:__subpackages__,//visibility:public,g" jaxlib/rocm/BUILD
+    """,
+])
 
 load("@enzyme_ad//third_party/xla:workspace.bzl", xla_workspace = "repo")
 
