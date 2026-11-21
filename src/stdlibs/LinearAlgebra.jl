@@ -914,4 +914,89 @@ function Base.:-(
     return diagm(@opcall(fill(A.λ * oneunit(promote_type(T1, T2)), m))) - B
 end
 
+# Matrix exponential (Higham 2005/2009 [13/13] Padé scaling-and-squaring)
+function LinearAlgebra.eigtype(::Type{TracedRNumber{T}}) where {T}
+    return TracedRNumber{LinearAlgebra.eigtype(T)}
+end
+
+function _matrix_exp_pade13(A_in::AnyTracedRMatrix)
+    n = LinearAlgebra.checksquare(A_in)
+    UT = unwrapped_eltype(A_in)
+    TE = LinearAlgebra.eigtype(UT)
+    TL = if TE <: Complex
+        Complex{promote_type(float(real(TE)), Float32)}
+    else
+        promote_type(float(TE), Float32)
+    end
+    A = promote_to(TracedRArray{TL,2}, materialize_traced_array(A_in))
+    if n == 0
+        return TL === TE ? copy(A) : promote_to(TracedRArray{TE,2}, A)
+    elseif n == 1
+        res1 = exp.(A)
+        return TL === TE ? res1 : promote_to(TracedRArray{TE,2}, res1)
+    end
+
+    RT = real(TL)
+    b0 = 64764752532480000.0
+    c1 = RT(64764752532480000.0 / b0)
+    c2 = RT(32382376266240000.0 / b0)
+    c3 = RT(7771770303897600.0 / b0)
+    c4 = RT(1187353796428800.0 / b0)
+    c5 = RT(129060195264000.0 / b0)
+    c6 = RT(10559470521600.0 / b0)
+    c7 = RT(670442572800.0 / b0)
+    c8 = RT(33522128640.0 / b0)
+    c9 = RT(1323241920.0 / b0)
+    c10 = RT(40840800.0 / b0)
+    c11 = RT(960960.0 / b0)
+    c12 = RT(16380.0 / b0)
+    c13 = RT(182.0 / b0)
+    c14 = RT(1.0 / b0)
+
+    theta13 = RT(5.371920351148152)
+    opnorm1 = maximum(sum(abs.(A); dims=1))
+    s = max(Int64(0), ceil(Int64, log2(max(opnorm1 / theta13, floatmin(RT)))))
+    scale = promote_to(TracedRNumber{RT}, RT(2))^promote_to(TracedRNumber{RT}, -s)
+
+    B = A .* scale
+    B2 = B * B
+    B4 = B2 * B2
+    B6 = B2 * B4
+    Id = diagm(@opcall(fill(one(TL), n)))
+
+    U =
+        B * (
+            B6 * (c14 .* B6 .+ c12 .* B4 .+ c10 .* B2) .+ c8 .* B6 .+ c6 .* B4 .+
+            c4 .* B2 .+ c2 .* Id
+        )
+    V =
+        B6 * (c13 .* B6 .+ c11 .* B4 .+ c9 .* B2) .+ c7 .* B6 .+ c5 .* B4 .+ c3 .* B2 .+
+        c1 .* Id
+
+    X = (V .- U) \ (V .+ U)
+    @trace for _ in 1:s
+        X = X * X
+    end
+    return TL === TE ? X : promote_to(TracedRArray{TE,2}, X)
+end
+
+function LinearAlgebra.exp!(A::AnyTracedRMatrix)
+    copyto!(A, _matrix_exp_pade13(A))
+    return A
+end
+
+Base.exp(A::TracedRArray{T,2}) where {T} = _matrix_exp_pade13(A)
+function Base.cis(A::TracedRArray{T,2}) where {T}
+    RT = real(T)
+    return _matrix_exp_pade13(Complex{RT}(zero(RT), one(RT)) .* A)
+end
+function Base.exp(A::Symmetric{<:TracedRNumber,<:AnyTracedRMatrix})
+    return Symmetric(_matrix_exp_pade13(A))
+end
+function Base.exp(A::Hermitian{<:TracedRNumber,<:AnyTracedRMatrix})
+    M = materialize_traced_array(A)
+    H = (M .+ M') ./ real(unwrapped_eltype(M))(2)
+    return Hermitian(_matrix_exp_pade13(H))
+end
+
 end
