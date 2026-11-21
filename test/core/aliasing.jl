@@ -111,6 +111,73 @@ end
     end
 end
 
+function double_inplace_3023!(x)
+    x .= x .* 2.0
+    return x
+end
+
+function add_one_inplace_3023!(x)
+    x .= x .+ 1.0
+    return nothing
+end
+
+identity_3023(x) = x
+tuple_both_3023!(x) = (x .= x .* 3.0; (x, x))
+
+function save_old_then_mutate_3023!(s::State)
+    old_u = s.u
+    s.u = s.u .* 2.0
+    return old_u
+end
+
+function mutate_field_and_return_3023!(s::State)
+    s.u .= s.u .* 5.0
+    return s.u
+end
+
+function push_and_return_3023!(x)
+    push!(x, 4.0)
+    return x
+end
+
+@testset "Returned array preserves identity (===) with argument (#3023)" begin
+    x_ra = Reactant.to_rarray(ones(4))
+    y = @jit double_inplace_3023!(x_ra)
+    @test x_ra === y
+    @test Array(x_ra) == [2.0, 2.0, 2.0, 2.0]
+    @test Array(y) == [2.0, 2.0, 2.0, 2.0]
+
+    @jit add_one_inplace_3023!(x_ra)
+    @test x_ra === y
+    @test Array(x_ra) == [3.0, 3.0, 3.0, 3.0]
+    @test Array(y) == [3.0, 3.0, 3.0, 3.0]
+
+    z = @jit identity_3023(x_ra)
+    @test z === x_ra
+
+    a, b = @jit tuple_both_3023!(x_ra)
+    @test a === x_ra
+    @test b === x_ra
+    @test Array(a) == [9.0, 9.0, 9.0, 9.0]
+
+    s = State(Reactant.to_rarray([1.0, 2.0]), Reactant.to_rarray([0.0, 0.0]))
+    old_u = @jit save_old_then_mutate_3023!(s)
+    @test Array(old_u) == [1.0, 2.0]
+    @test Array(s.u) == [2.0, 4.0]
+    @test old_u !== s.u
+
+    u_ret = @jit mutate_field_and_return_3023!(s)
+    @test u_ret === s.u
+    @test Array(u_ret) == [10.0, 20.0]
+
+    v_ra = Reactant.to_rarray([1.0, 2.0, 3.0])
+    v_ret = @jit push_and_return_3023!(v_ra)
+    @test v_ret === v_ra
+    @test size(v_ra) == (4,)
+    @test Array(v_ret) == [1.0, 2.0, 3.0, 4.0]
+    @test Array(v_ra) == [1.0, 2.0, 3.0, 4.0]
+end
+
 # An array shared by many immutable wrappers, as when every field of a model holds its own
 # copy of an immutable grid that references the same metric arrays.
 struct SharedWrapper{A}
