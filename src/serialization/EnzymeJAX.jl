@@ -10,7 +10,7 @@ using ..Reactant: Reactant, Compiler, Serialization, MLIR
         function_name::String=string(f),
         preserve_sharding::Bool=true,
         export_data_as_npz::Bool=true,
-        compile_options=Reactant.Compiler.CompileOptions(),
+        compile_options=Reactant.CompileOptions(; donated_args=:none),
     )
 
 Export a Julia function to EnzymeJAX format for use in Python/JAX.
@@ -92,8 +92,12 @@ function export_to_enzymejax(
     function_name::String=string(f),
     preserve_sharding::Bool=true,
     export_data_as_npz::Bool=true,
-    compile_options=Reactant.Compiler.CompileOptions(),
+    compile_options=Reactant.CompileOptions(; donated_args=:none),
 )
+    # EnzymeJAX's `hlo_call` does not support `tf.aliasing_output` buffer donation attributes.
+    compile_options = Reactant.__compile_options_with_updated_donated_args(
+        compile_options, :none
+    )
     function_name = replace(function_name, "!" => "_")
 
     if output_dir === nothing
