@@ -625,6 +625,27 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(PT::Type{Base.Pairs{K,V,I,A}}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(ndevices),
+    @nospecialize(runtime),
+) where {K,V,I,A}
+    K2 = traced_type_inner(K, seen, mode, track_numbers, ndevices, runtime)
+    V2 = traced_type_inner(V, seen, mode, track_numbers, ndevices, runtime)
+    I2 = traced_type_inner(I, seen, mode, track_numbers, ndevices, runtime)
+    A2 = traced_type_inner(A, seen, mode, track_numbers, ndevices, runtime)
+    if K2 === K && V2 === V && I2 === I && A2 === A
+        return PT
+    end
+    if !(A2 isa UnionAll) && !(A isa UnionAll) && V === eltype(A)
+        V2 = eltype(A2)
+    end
+    return Base.Pairs{K2,V2,I2,A2}
+end
+
+Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(PT::Type{<:Random.AbstractRNG}),
     seen,
     @nospecialize(mode::TraceMode),
