@@ -663,3 +663,66 @@ end
     end
 end
 =#
+
+struct ShardedContainerFoo{A}
+    a::A
+end
+
+struct ShardedContainerBar{A,B}
+    a::A
+    n::B
+end
+
+@testset "Sharded Results in Containers and Structs" begin
+    if length(addressable_devices) ≥ 2
+        mesh = Sharding.Mesh(reshape(Int64[0, 1], 2, 1), ("x", "y"))
+        sh_x = Sharding.NamedSharding(mesh, ("x", nothing))
+
+        xs_h = [reshape(collect(Float32, 1:16) .+ Float32(i), 4, 4) for i in 1:3]
+        xs = [Reactant.to_rarray(x; sharding=sh_x) for x in xs_h]
+
+        g_vec(xs) = map(x -> x .* 2.0f0, xs)
+        ys = @jit g_vec(xs)
+        @test ys isa Vector
+        @test all(Array(ys[i]) ≈ 2.0f0 .* xs_h[i] for i in 1:3)
+
+        h_struct(x) = ShardedContainerFoo(x .* 2.0f0)
+        r_foo = @jit h_struct(xs[1])
+        @test r_foo isa ShardedContainerFoo
+        @test Array(r_foo.a) ≈ 2.0f0 .* xs_h[1]
+
+        k_struct(x) = ShardedContainerBar(x .+ 1.0f0, sum(x))
+        r_bar = @jit k_struct(xs[1])
+        @test r_bar isa ShardedContainerBar
+        @test Array(r_bar.a) ≈ xs_h[1] .+ 1.0f0
+        @test Reactant.to_number(r_bar.n) ≈ sum(xs_h[1])
+
+        d_dict(x) = Dict(:a => x .* 2.0f0, :b => x .+ 1.0f0)
+        r_dict = @jit d_dict(xs[1])
+        @test r_dict isa Dict
+        @test Array(r_dict[:a]) ≈ 2.0f0 .* xs_h[1]
+        @test Array(r_dict[:b]) ≈ xs_h[1] .+ 1.0f0
+
+        function t_mixed(x)
+            return (
+                ShardedContainerBar(
+                    Complex.(x, 2.0f0 .* x), Complex(sum(x), 2.0f0 * sum(x))
+                ),
+                1:4,
+                1.0f0 + 2.0f0im,
+            )
+        end
+        r_mixed, rng_out, c_out = @jit t_mixed(xs[1])
+        @test Array(r_mixed.a) ≈ Complex.(xs_h[1], 2.0f0 .* xs_h[1])
+        @test Reactant.to_number(r_mixed.n) ≈ Complex(sum(xs_h[1]), 2.0f0 * sum(xs_h[1]))
+        @test rng_out == 1:4
+        @test c_out == 1.0f0 + 2.0f0im
+
+        u_h = reshape(collect(Float32, 1:16), 4, 4)
+        u = Reactant.to_rarray(u_h)
+        r_unsharded = @jit h_struct(u)
+        @test Array(r_unsharded.a) ≈ 2.0f0 .* u_h
+    else
+        @warn "Not enough addressable devices to run sharding tests"
+    end
+end
