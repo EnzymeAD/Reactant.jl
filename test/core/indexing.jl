@@ -643,3 +643,35 @@ index_plain_mat_linear(idx) = @allowscalar reshape(collect(1.0:10.0), 2, 5)[idx]
     @test @jit(index_plain_mat_linear(Reactant.to_rarray([2, 4, 7]))) ≈ [2.0, 4.0, 7.0]
     @test @jit(index_plain_mat_linear(ConcreteRNumber(5))) ≈ 5.0
 end
+
+function assign_subarray_bcast!(x, inds, val)
+    x[inds] .= val
+    return x
+end
+
+function assign_subarray_bcast_2d!(x, inds, val)
+    x[inds, :] .= val
+    return x
+end
+
+@testset "broadcast assignment to subarray with traced indices (#2960)" begin
+    x = zeros(5)
+    inds = [2, 4]
+    val = [10.0, 20.0]
+    xr = Reactant.to_rarray(copy(x))
+    indsr = Reactant.to_rarray(inds)
+    valr = Reactant.to_rarray(val)
+    res = @jit assign_subarray_bcast!(xr, indsr, valr)
+    @test Array(res) == assign_subarray_bcast!(copy(x), inds, val)
+
+    xr2 = Reactant.to_rarray(zeros(5))
+    res2 = @jit assign_subarray_bcast!(xr2, indsr, ConcreteRNumber(7.0))
+    @test Array(res2) == [0.0, 7.0, 0.0, 7.0, 0.0]
+
+    x2d = zeros(4, 3)
+    val2d = reshape(collect(1.0:6.0), 2, 3)
+    xr2d = Reactant.to_rarray(copy(x2d))
+    valr2d = Reactant.to_rarray(val2d)
+    res2d = @jit assign_subarray_bcast_2d!(xr2d, indsr, valr2d)
+    @test Array(res2d) == assign_subarray_bcast_2d!(copy(x2d), inds, val2d)
+end

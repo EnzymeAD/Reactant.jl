@@ -1435,4 +1435,17 @@ end
 
 Base.extrema(A::TracedRArray) = minimum(A), maximum(A)
 
+# TODO(#2236): actually perform bounds checking
+function Base.checkindex(::Type{Bool}, _inds, ::AnyTracedRArray)
+    @warn "Currently we don't perform bounds checking for TracedRArray. This will be \
+           fixed in a future version of Reactant." maxlog = 1
+    return true
+end
+
+function Base.checkindex(::Type{Bool}, ::AbstractUnitRange, ::AnyTracedRArray)
+    @warn "Currently we don't perform bounds checking for TracedRArray. This will be \
+           fixed in a future version of Reactant." maxlog = 1
+    return true
+end
+
 end
