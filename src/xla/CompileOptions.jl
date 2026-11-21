@@ -35,12 +35,23 @@ function get_default_compile_options()
     return proto
 end
 
-function get_debug_options(; kwargs...)
+function get_debug_options(; platform::String="", kwargs...)
     debug_options = get_default_debug_options()
 
     # default overrides. can we changed by the user by passing in kwargs
     @set! debug_options.xla_gpu_cuda_data_dir = CUDA_DATA_DIR[]
     @set! debug_options.xla_enable_enzyme_comms_opt = true
+
+    if platform == "rocm"
+        # HIP graph replay of command buffers segfaults inside the HSA runtime
+        # on current ROCm stacks (deterministically, in the first execution of
+        # a while-loop command buffer). Default them off until that is fixed
+        # upstream; the user override below still wins.
+        # https://gist.github.com/ftynse/5c3816a1cea5daa7dc189b937b62f9ca (issue 6)
+        @set! debug_options.xla_gpu_enable_command_buffer = Vector{
+            Reactant.Proto.xla.var"DebugOptions.CommandBufferCmdType".T
+        }()
+    end
 
     if Reactant.PersistentCompileCache.kernel_cache_enabled()
         @set! debug_options.xla_gpu_kernel_cache_file = Reactant.PersistentCompileCache.get_kernel_cache_path()
@@ -69,6 +80,7 @@ function make_compile_options(;
     num_replicas::Int64=1,
     num_partitions::Int64=1,
     mesh_ids::Union{Vector{Int64},Nothing}=nothing,
+    platform::String="",
     xla_debug_options=(;),
     xla_executable_build_options=(;),
     xla_compile_options=(;),
@@ -76,7 +88,9 @@ function make_compile_options(;
     compile_options = get_default_compile_options()
     executable_build_options = compile_options.executable_build_options
 
-    @set! executable_build_options.debug_options = get_debug_options(; xla_debug_options...)
+    @set! executable_build_options.debug_options = get_debug_options(;
+        platform, xla_debug_options...
+    )
     @set! executable_build_options.num_replicas = num_replicas
     @set! executable_build_options.num_partitions = num_partitions
 
