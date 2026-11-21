@@ -1113,22 +1113,22 @@ function typevar_dict(t)
 end
 
 Base.@assume_effects :total @inline function traced_type(
-    T::Type, ::Val{mode}, track_numbers::Type, sharding, runtime
+    T::Type, ::Val{mode}, track_numbers::Type, sharding, runtime, ndevices=nothing
 ) where {mode}
     if mode == TracedSetPath || mode == TracedTrack || mode == TracedToTypes
         return T
     end
 
-    ndevices = Sharding.ndevices(sharding)
+    ndev = ndevices === nothing ? Sharding.ndevices(sharding) : _unwrap_val(ndevices)
     cache = nothing
-    cache_key = (mode, track_numbers, ndevices)
+    cache_key = (mode, track_numbers, (ndev, runtime))
     if haskey(traced_type_cache, cache_key)
         cache = traced_type_cache[cache_key]
     else
         cache = Dict{Type,Type}()
         traced_type_cache[cache_key] = cache
     end
-    return traced_type_inner(T, cache, mode, track_numbers, Val(ndevices), runtime)
+    return traced_type_inner(T, cache, mode, track_numbers, Val(ndev), runtime)
 end
 
 abstract type TracedTypeException <: Exception end
@@ -1183,6 +1183,30 @@ function make_tracer(
 end
 append_path(@nospecialize(path), i) = (path..., i)
 
+function _is_pjrt_ndevices_mismatch(@nospecialize(Actual), @nospecialize(Expected))
+    if Actual <: ConcretePJRTArray && Expected <: ConcretePJRTArray
+        return Actual.parameters[1] === Expected.parameters[1] &&
+               Actual.parameters[2] === Expected.parameters[2]
+    elseif Actual <: ConcretePJRTNumber && Expected <: ConcretePJRTNumber
+        return Actual.parameters[1] === Expected.parameters[1]
+    end
+    return false
+end
+
+function _recompute_concrete_struct_type(@nospecialize(TT), flds::Vector{Any}, nf::Int)
+    wrapper = TT.name.wrapper
+    unwrapped = Base.unwrap_unionall(wrapper)
+    params = Any[TT.parameters...]
+    tvars = typevar_dict(wrapper)
+    for i in 1:nf
+        def_ft = fieldtype(unwrapped, i)
+        if def_ft isa TypeVar && haskey(tvars, def_ft)
+            params[tvars[def_ft]] = Core.Typeof(flds[i])
+        end
+    end
+    return first(apply_type_with_promotion(wrapper, params, tvars))
+end
+
 Base.@nospecializeinfer function make_tracer_via_immutable_constructor(
     seen,
     @nospecialize(prev),
@@ -1191,6 +1215,7 @@ Base.@nospecializeinfer function make_tracer_via_immutable_constructor(
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
     @nospecialize(runtime = nothing),
+    @nospecialize(ndevices = nothing),
     kwargs...,
 )
     RT = Core.Typeof(prev)
@@ -1206,7 +1231,7 @@ Base.@nospecializeinfer function make_tracer_via_immutable_constructor(
         push!(path, RT)
         seen[prev] = VisitedObject(length(seen) + 1)
     end
-    TT = traced_type(RT, Val(mode), track_numbers, sharding, runtime)
+    TT = traced_type(RT, Val(mode), track_numbers, sharding, runtime, ndevices)
     @assert !Base.isabstracttype(RT)
     @assert Base.isconcretetype(RT)
     nf = fieldcount(RT)
@@ -1235,6 +1260,7 @@ Base.@nospecializeinfer function make_tracer_via_immutable_constructor(
                 track_numbers,
                 sharding=Base.getproperty(sharding, i),
                 runtime,
+                ndevices,
                 kwargs...,
             )
             if xi !== xi2
@@ -1275,6 +1301,7 @@ Base.@nospecializeinfer function make_tracer_unknown(
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
     @nospecialize(runtime = nothing),
+    @nospecialize(ndevices = nothing),
     kwargs...,
 )
     RT = Core.Typeof(prev)
@@ -1290,7 +1317,7 @@ Base.@nospecializeinfer function make_tracer_unknown(
         push!(path, RT)
         seen[prev] = VisitedObject(length(seen) + 1)
     end
-    TT = traced_type(RT, Val(mode), track_numbers, sharding, runtime)
+    TT = traced_type(RT, Val(mode), track_numbers, sharding, runtime, ndevices)
     @assert !Base.isabstracttype(RT)
     @assert Base.isconcretetype(RT)
     nf = fieldcount(RT)
@@ -1319,6 +1346,7 @@ Base.@nospecializeinfer function make_tracer_unknown(
                     track_numbers,
                     sharding=Base.getproperty(sharding, i),
                     runtime,
+                    ndevices,
                     kwargs...,
                 )
                 if xi !== xi2
@@ -1344,6 +1372,7 @@ Base.@nospecializeinfer function make_tracer_unknown(
 
     flds = Vector{Any}(undef, nf)
     changed = false
+    recompute_tt = false
     for i in 1:nf
         if isdefined(prev, i)
             newpath = mode == TracedToTypes ? path : append_path(path, i)
@@ -1356,6 +1385,7 @@ Base.@nospecializeinfer function make_tracer_unknown(
                 track_numbers,
                 sharding=getproperty(sharding, i),
                 runtime,
+                ndevices,
                 kwargs...,
             )
             if xi !== xi2
@@ -1368,6 +1398,9 @@ Base.@nospecializeinfer function make_tracer_unknown(
                     xi2 = Core.Typeof(xi2)((newpath,), xi2.mlir_data)
                     seen[xi2] = xi2
                     changed = true
+                elseif mode == TracedToConcrete &&
+                    _is_pjrt_ndevices_mismatch(Core.Typeof(xi2), FT)
+                    recompute_tt = true
                 elseif !ismutabletype(FT) &&
                     !ismutabletype(Core.Typeof(xi2)) &&
                     fieldcount(FT) == fieldcount(Core.Typeof(xi2))
@@ -1432,6 +1465,9 @@ Base.@nospecializeinfer function make_tracer_unknown(
     if !changed
         seen[prev] = prev
         return prev
+    end
+    if recompute_tt
+        TT = _recompute_concrete_struct_type(TT, flds, nf)
     end
     y = ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), TT, flds, nf)
     seen[prev] = y
@@ -1561,6 +1597,8 @@ Base.@nospecializeinfer function make_tracer(
     tobatch=nothing,
     @nospecialize(sharding = Sharding.NoSharding()),
     @nospecialize(runtime = nothing),
+    @nospecialize(ndevices = nothing),
+    @nospecialize(preserved_ndevices = nothing),
     kwargs...,
 ) where {T,N}
     if mode == ConcreteToTraced
@@ -1604,8 +1642,17 @@ Base.@nospecializeinfer function make_tracer(
         if runtime isa Val{:PJRT}
             haskey(seen, prev) && return seen[prev]::ConcretePJRTArray{T,N}
             if !Sharding.is_sharded(sharding)
-                res = ConcretePJRTArray{T,N,1}(
-                    (XLA.PJRT.AsyncEmptyBuffer,), size(prev), Sharding.NoShardInfo()
+                D = if preserved_ndevices !== nothing && haskey(preserved_ndevices, prev)
+                    preserved_ndevices[prev]::Int
+                elseif ndevices === nothing
+                    1
+                else
+                    _unwrap_val(ndevices)
+                end
+                res = ConcretePJRTArray{T,N,D}(
+                    ntuple(Returns(XLA.PJRT.AsyncEmptyBuffer), Val(D)),
+                    size(prev),
+                    Sharding.NoShardInfo(),
                 )
             else
                 error("TODO(#2230): implement sharding")
@@ -1650,6 +1697,8 @@ Base.@nospecializeinfer function make_tracer(
     toscalar=false,
     @nospecialize(sharding = Sharding.NoSharding()),
     @nospecialize(runtime = nothing),
+    @nospecialize(ndevices = nothing),
+    @nospecialize(preserved_ndevices = nothing),
     kwargs...,
 ) where {T}
     if mode == ConcreteToTraced
@@ -1693,8 +1742,16 @@ Base.@nospecializeinfer function make_tracer(
         if runtime isa Val{:PJRT}
             haskey(seen, prev) && return seen[prev]::ConcretePJRTNumber{T}
             if !Sharding.is_sharded(sharding)
-                res = ConcretePJRTNumber{T,1}(
-                    (XLA.PJRT.AsyncEmptyBuffer,), Sharding.NoShardInfo()
+                D = if preserved_ndevices !== nothing && haskey(preserved_ndevices, prev)
+                    preserved_ndevices[prev]::Int
+                elseif ndevices === nothing
+                    1
+                else
+                    _unwrap_val(ndevices)
+                end
+                res = ConcretePJRTNumber{T,D}(
+                    ntuple(Returns(XLA.PJRT.AsyncEmptyBuffer), Val(D)),
+                    Sharding.NoShardInfo(),
                 )
             else
                 error("TODO(#2230): implement sharding")
@@ -1873,6 +1930,7 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(runtime = nothing),
     @nospecialize(device = nothing),
     @nospecialize(client = nothing),
+    @nospecialize(ndevices = nothing),
     kwargs...,
 )
     RT = Core.Typeof(prev)
@@ -1914,13 +1972,14 @@ Base.@nospecializeinfer function make_tracer(
                     runtime,
                     device,
                     client,
+                    ndevices,
                     kwargs...,
                 )
             end
         end
         return nothing
     end
-    TT = traced_type(eltype(RT), Val(mode), track_numbers, sharding, runtime)
+    TT = traced_type(eltype(RT), Val(mode), track_numbers, sharding, runtime, ndevices)
     newa = Array{TT,ndims(RT)}(undef, size(prev))
     seen[prev] = newa
     same = true
@@ -1937,6 +1996,7 @@ Base.@nospecializeinfer function make_tracer(
                 runtime,
                 device,
                 client,
+                ndevices,
                 kwargs...,
             )
             if pv !== nv
@@ -1972,6 +2032,7 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(runtime = nothing),
     @nospecialize(device = nothing),
     @nospecialize(client = nothing),
+    @nospecialize(ndevices = nothing),
     kwargs...,
 ) where {Key,Value}
     RT = Core.Typeof(prev)
@@ -2009,6 +2070,7 @@ Base.@nospecializeinfer function make_tracer(
                 runtime,
                 device,
                 client,
+                ndevices,
                 kwargs...,
             )
             make_tracer(
@@ -2021,12 +2083,13 @@ Base.@nospecializeinfer function make_tracer(
                 runtime,
                 device,
                 client,
+                ndevices,
                 kwargs...,
             )
         end
         return nothing
     end
-    Value2 = traced_type(Value, Val(mode), track_numbers, sharding, runtime)
+    Value2 = traced_type(Value, Val(mode), track_numbers, sharding, runtime, ndevices)
     newa = Dict{Key,Value2}()
     seen[prev] = newa
     same = true
@@ -2039,6 +2102,7 @@ Base.@nospecializeinfer function make_tracer(
             track_numbers,
             sharding=Base.getproperty(sharding, k),
             runtime,
+            ndevices,
             kwargs...,
         )
         if v !== nv
@@ -2093,6 +2157,7 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
     @nospecialize(runtime = nothing),
+    @nospecialize(ndevices = nothing),
     kwargs...,
 )
     NT = Core.Typeof(prev)
@@ -2103,25 +2168,38 @@ Base.@nospecializeinfer function make_tracer(
         push!(path, NT)
         for i in 1:length(A)
             make_tracer(
-                seen, Base.getfield(prev, i), path, mode; track_numbers, sharding, kwargs...
+                seen,
+                Base.getfield(prev, i),
+                path,
+                mode;
+                track_numbers,
+                sharding,
+                ndevices,
+                kwargs...,
             )
         end
         return nothing
     end
-    return NamedTuple{A,traced_type(RT, Val(mode), track_numbers, sharding, runtime)}((
-        (
-            make_tracer(
-                seen,
-                Base.getfield(prev, i),
-                append_path(path, i),
-                mode;
-                sharding=Base.getproperty(sharding, i),
-                track_numbers,
-                runtime,
-                kwargs...,
-            ) for i in 1:length(A)
-        )...,
-    ))
+    vals = Vector{Any}(undef, length(A))
+    for i in 1:length(A)
+        vals[i] = make_tracer(
+            seen,
+            Base.getfield(prev, i),
+            append_path(path, i),
+            mode;
+            sharding=Base.getproperty(sharding, i),
+            track_numbers,
+            runtime,
+            ndevices,
+            kwargs...,
+        )
+    end
+    if mode == TracedToConcrete
+        return NamedTuple{A}((vals...,))
+    end
+    return NamedTuple{
+        A,traced_type(RT, Val(mode), track_numbers, sharding, runtime, ndevices)
+    }((vals...,))
 end
 
 struct UndefinedBox end
