@@ -1,4 +1,4 @@
-using Reactant, Test, FileCheck
+using Reactant, Test, Enzyme, FileCheck
 
 const addressable_devices = Reactant.addressable_devices()
 
@@ -350,5 +350,142 @@ end
         if RunningOnTPU
             @warn "Skipping MultiRotate test on TPU"
         end
+    end
+end
+
+bcast_cf(x, cf) = x .* reshape(cf, 1, 1, 1, 2)
+bcast_ct(x, ct) = x .* reshape(ct, 1, 1, 4, 1)
+function bcast_rep_first(b, x, ct, cf)
+    return reshape(b, 16, 16, 1, 1) .* reshape(ct, 1, 1, 4, 1) .* reshape(cf, 1, 1, 1, 2) .*
+           x
+end
+function bcast_x_first(b, x, ct, cf)
+    return x .* reshape(b, 16, 16, 1, 1) .* reshape(ct, 1, 1, 4, 1) .*
+           reshape(cf, 1, 1, 1, 2)
+end
+bcast_dyn_singleton(b4, x) = b4 .* x
+bcast_all_singleton(x, c) = x .* c
+bcast_multi_use(x, y, c) = (x .* c, y .+ c)
+const bcast_ct_const = Float32[1.5, -2.0, 0.5, 3.0]
+const bcast_cf_const = Float32[2.5, -1.25]
+bcast_loss_x(x) = sum(abs2, bcast_cf(bcast_ct(x, bcast_ct_const), bcast_cf_const))
+function bcast_grad_x(x)
+    dx = zero(x)
+    Enzyme.autodiff(Reverse, bcast_loss_x, Active, Duplicated(x, dx))
+    return dx
+end
+bcast_loss_bx(b, x) = sum(abs2, bcast_rep_first(b, x, bcast_ct_const, bcast_cf_const))
+function bcast_grad_bx(b, x)
+    db = zero(b)
+    dx = zero(x)
+    Enzyme.autodiff(Reverse, bcast_loss_bx, Active, Duplicated(b, db), Duplicated(x, dx))
+    return db, dx
+end
+
+@testset "Singleton Broadcast Sharding (#3527)" begin
+    if length(addressable_devices) ≥ 4
+        mesh = Sharding.Mesh(reshape(addressable_devices[1:4], 2, 2), (:t, :f))
+
+        x_jl = reshape(collect(Float32, 1:2048) ./ 128, 16, 16, 4, 2)
+        b_jl = reshape(collect(Float32, 1:256) ./ 64, 16, 16)
+        ct_jl = Float32[1.5, -2.0, 0.5, 3.0]
+        cf_jl = Float32[2.5, -1.25]
+
+        x = Reactant.to_rarray(x_jl; sharding=Sharding.DimsSharding(mesh, (3, 4), (:t, :f)))
+        b = Reactant.to_rarray(b_jl; sharding=Sharding.Replicated(mesh))
+
+        for sp in (:to_mhlo_shardings, ShardyPropagationOptions(), :post_sdy_propagation)
+            @testset "shardy_passes = $sp" begin
+                for (fn, rargs, jlargs) in (
+                    (bcast_cf, (x, cf_jl), (x_jl, cf_jl)),
+                    (bcast_ct, (x, ct_jl), (x_jl, ct_jl)),
+                    (bcast_rep_first, (b, x, ct_jl, cf_jl), (b_jl, x_jl, ct_jl, cf_jl)),
+                    (bcast_x_first, (b, x, ct_jl, cf_jl), (b_jl, x_jl, ct_jl, cf_jl)),
+                )
+                    hlo = @code_xla shardy_passes = sp fn(rargs...)
+                    @test @filecheck begin
+                        @check_not "collective-permute"
+                        @check_not "all-reduce"
+                        @check_not "all-gather"
+                        @check_not "all-to-all"
+                        @check_not "reduce-scatter"
+                        hlo
+                    end
+
+                    res = @jit shardy_passes = sp fn(rargs...)
+                    @test Array(res) ≈ fn(jlargs...)
+                end
+            end
+        end
+
+        mhlo1 = repr(@code_mhlo bcast_cf(x, cf_jl))
+        @test occursin("mhlo.broadcast_in_dim", mhlo1)
+        @test !occursin("tensor<2x1x1x1xf32>", mhlo1)
+        @test occursin("tensor<2xf32>", mhlo1)
+
+        b4_jl = reshape(b_jl, 16, 16, 1, 1)
+        b4 = Reactant.to_rarray(b4_jl; sharding=Sharding.Replicated(mesh))
+        hlo_b4 = @code_xla shardy_passes = :to_mhlo_shardings bcast_dyn_singleton(b4, x)
+        @test @filecheck begin
+            @check_not "collective-permute"
+            @check_not "all-reduce"
+            @check_not "all-gather"
+            @check_not "all-to-all"
+            @check_not "reduce-scatter"
+            hlo_b4
+        end
+        @test Array(@jit shardy_passes = :to_mhlo_shardings bcast_dyn_singleton(b4, x)) ≈
+            bcast_dyn_singleton(b4_jl, x_jl)
+
+        c1111 = fill(3.25f0, 1, 1, 1, 1)
+        hlo_c1 = @code_xla shardy_passes = :to_mhlo_shardings bcast_all_singleton(x, c1111)
+        @test @filecheck begin
+            @check_not "collective-permute"
+            @check_not "all-reduce"
+            @check_not "all-gather"
+            @check_not "all-to-all"
+            @check_not "reduce-scatter"
+            hlo_c1
+        end
+        @test Array(@jit shardy_passes = :to_mhlo_shardings bcast_all_singleton(x, c1111)) ≈
+            bcast_all_singleton(x_jl, c1111)
+
+        c_multi = reshape(Float32[1.25, -0.75], 1, 1, 1, 2)
+        y_jl = reshape(collect(Float32, 1:64) ./ 16, 4, 2, 4, 2)
+        y = Reactant.to_rarray(y_jl; sharding=Sharding.DimsSharding(mesh, (3, 4), (:t, :f)))
+        hlo_multi = @code_xla shardy_passes = :to_mhlo_shardings bcast_multi_use(
+            x, y, c_multi
+        )
+        @test @filecheck begin
+            @check_not "collective-permute"
+            @check_not "all-reduce"
+            @check_not "all-gather"
+            @check_not "all-to-all"
+            @check_not "reduce-scatter"
+            hlo_multi
+        end
+        rx, ry = @jit shardy_passes = :to_mhlo_shardings bcast_multi_use(x, y, c_multi)
+        ex, ey = bcast_multi_use(x_jl, y_jl, c_multi)
+        @test Array(rx) ≈ ex
+        @test Array(ry) ≈ ey
+
+        hlo_gx = @code_xla shardy_passes = :to_mhlo_shardings bcast_grad_x(x)
+        @test @filecheck begin
+            @check_not "collective-permute"
+            @check_not "all-reduce"
+            @check_not "all-gather"
+            @check_not "all-to-all"
+            @check_not "reduce-scatter"
+            hlo_gx
+        end
+        scale_tf = reshape(ct_jl, 1, 1, 4, 1) .* reshape(cf_jl, 1, 1, 1, 2)
+        dx_only = @jit shardy_passes = :to_mhlo_shardings bcast_grad_x(x)
+        @test Array(dx_only) ≈ 2 .* x_jl .* abs2.(scale_tf)
+
+        db_ra, dx_ra = @jit shardy_passes = :to_mhlo_shardings bcast_grad_bx(b, x)
+        fwd = bcast_rep_first(b_jl, x_jl, ct_jl, cf_jl)
+        @test Array(dx_ra) ≈ 2 .* fwd .* reshape(b_jl, 16, 16, 1, 1) .* scale_tf
+        @test Array(db_ra) ≈
+            dropdims(sum(2 .* fwd .* scale_tf .* x_jl; dims=(3, 4)); dims=(3, 4))
     end
 end
