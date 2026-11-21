@@ -335,6 +335,31 @@ end
         [4, 2],        #=iota_reshape_dims=#
         [2, 1],        #=iota_transpose_perm=#
     ) == [0, 2, 4, 6, 1, 3, 5, 7]
+
+    # Non-involution 3D permutations (#2261)
+    @test Reactant.XLA.generate_device_list_from_iota_tile(
+        [2, 3, 2], [2, 3, 2], [2, 3, 1]
+    ) == [0, 6, 1, 7, 2, 8, 3, 9, 4, 10, 5, 11]
+
+    @test Reactant.XLA.generate_device_list_from_iota_tile(
+        [2, 3, 2], [2, 3, 2], [3, 1, 2]
+    ) == [0, 2, 4, 6, 8, 10, 1, 3, 5, 7, 9, 11]
+end
+
+@testset "Non-divisible Sharding Warning (#2675)" begin
+    if length(addressable_devices) ≥ 4
+        mesh4 = Sharding.Mesh(reshape(addressable_devices[1:4], 4, 1), (:x, :y))
+        dims_shard = Sharding.DimsSharding(mesh4, (1,), (:x,))
+        (_, updated_126) = @test_logs (:warn, r"not evenly divisible") Sharding.sharding_to_array_slices(
+            dims_shard, (126,); return_updated_sharding=Val(true)
+        )
+        @test updated_126.partition_spec == [[nothing]] || updated_126.subaxes == [[(1, 2)]]
+
+        (_, updated_125) = @test_logs (:warn, r"not evenly divisible") Sharding.sharding_to_array_slices(
+            dims_shard, (125,); return_updated_sharding=Val(true)
+        )
+        @test updated_125.partition_spec == [[nothing]]
+    end
 end
 
 @testset "Sharding with Mutation" begin
