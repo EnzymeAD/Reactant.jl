@@ -314,3 +314,39 @@ end
         @test res1 != res2
     end
 end
+
+test_rand_complex_vec_2355(rng, n) = rand(rng, ComplexF32, n)
+test_rand_complex_scalar_2355(rng) = rand(rng, ComplexF64)
+test_rand_complex_mat_2355(rng) = rand(rng, ComplexF64, (3, 4))
+
+function test_rand_bang_complex_2355(rng, x)
+    Random.rand!(rng, x)
+    return x
+end
+
+@testset "Complex uniform random generation (#2355)" begin
+    rng1 = Random.Xoshiro(123)
+    v = Array(@jit test_rand_complex_vec_2355(rng1, 64))
+    @test eltype(v) == ComplexF32
+    @test length(v) == 64
+    @test all(0.0f0 .<= real.(v) .< 1.0f0)
+    @test all(0.0f0 .<= imag.(v) .< 1.0f0)
+    @test real.(v) != imag.(v)
+
+    s = @jit test_rand_complex_scalar_2355(Random.Xoshiro(456))
+    s_val = Reactant.to_number(s)
+    @test s_val isa ComplexF64
+    @test 0.0 <= real(s_val) < 1.0
+    @test 0.0 <= imag(s_val) < 1.0
+
+    m = Array(@jit test_rand_complex_mat_2355(Random.Xoshiro(789)))
+    @test eltype(m) == ComplexF64
+    @test size(m) == (3, 4)
+
+    buf = Reactant.to_rarray(zeros(ComplexF32, 4, 4))
+    r_dev = Reactant.ReactantRNG()
+    @jit test_rand_bang_complex_2355(r_dev, buf)
+    buf_h = Array(buf)
+    @test any(!iszero, real.(buf_h))
+    @test any(!iszero, imag.(buf_h))
+end
