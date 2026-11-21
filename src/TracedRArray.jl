@@ -973,6 +973,9 @@ function overloaded_map(f, x::AbstractArray, xs::AbstractArray...)
             input = Reactant.materialize_traced_array(input)
         elseif eltype(input) <: Reactant.ReactantPrimitive
             input = Reactant.promote_to(TracedRArray{eltype(input),ndims(input)}, input)
+        elseif !(Reactant.ancestor(input) isa AnyTracedRArray) &&
+            Reactant._has_traced_leaves(input)
+            input = Reactant.promote_to(TracedRArray, input)
         else
             needs_unrolling[i] = true
         end
