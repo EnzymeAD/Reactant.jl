@@ -27,6 +27,69 @@ end
 solve_with_lu(A, b) = solve_with_fact(lu, A, b)
 solve_with_lu_batched(A, b) = solve_with_fact_batched(lu, A, b)
 
+solve_tridiag_2707(dl, d, du, b) = Tridiagonal(dl, d, du) \ b
+solve_tridiag_trans_2707(dl, d, du, b) = transpose(Tridiagonal(dl, d, du)) \ b
+solve_tridiag_adj_2707(dl, d, du, b) = adjoint(Tridiagonal(dl, d, du)) \ b
+solve_symtridiag_2707(dv, ev, b) = SymTridiagonal(dv, ev) \ b
+function solve_tridiag_ldiv_2707(dl, d, du, b)
+    out = copy(b)
+    ldiv!(Tridiagonal(dl, d, du), out)
+    return out
+end
+function solve_symtridiag_shift_2707(dv, ev, b, s)
+    out = copy(b)
+    ldiv!(SymTridiagonal(dv, ev), out; shift=s)
+    return out
+end
+
+@testset "Tridiagonal & SymTridiagonal Solve (#2707)" begin
+    @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
+        (T == ComplexF64 || T == Float64) && RunningOnTPU && continue
+
+        dl = T[1, -0.5, 0.25, 0.5]
+        d = T[4, 5, 4, 6, 5]
+        du = T[0.5, 1, -0.25, 0.75]
+        if T <: Complex
+            dl = dl .+ im .* T[0.1, -0.2, 0.3, -0.1]
+            d = d .+ im .* T[0.5, -0.4, 0.2, 0.3, -0.5]
+            du = du .+ im .* T[-0.2, 0.1, 0.4, -0.3]
+        end
+        b = T[1, 2, 3, 4, 5]
+        B = reshape(T[1:15...], 5, 3)
+
+        dl_r = Reactant.to_rarray(dl)
+        d_r = Reactant.to_rarray(d)
+        du_r = Reactant.to_rarray(du)
+        b_r = Reactant.to_rarray(b)
+        B_r = Reactant.to_rarray(B)
+
+        @test Array(@jit(solve_tridiag_2707(dl_r, d_r, du_r, b_r))) ≈
+            solve_tridiag_2707(dl, d, du, b) atol = 1e-4 rtol = 1e-3
+        @test Array(@jit(solve_tridiag_2707(dl_r, d_r, du_r, B_r))) ≈
+            solve_tridiag_2707(dl, d, du, B) atol = 1e-4 rtol = 1e-3
+        @test Array(@jit(solve_tridiag_2707(dl_r, d_r, du_r, b))) ≈
+            solve_tridiag_2707(dl, d, du, b) atol = 1e-4 rtol = 1e-3
+        @test Array(@jit(solve_tridiag_2707(dl, d, du, b_r))) ≈
+            solve_tridiag_2707(dl, d, du, b) atol = 1e-4 rtol = 1e-3
+        @test Array(@jit(solve_tridiag_trans_2707(dl_r, d_r, du_r, b_r))) ≈
+            solve_tridiag_trans_2707(dl, d, du, b) atol = 1e-4 rtol = 1e-3
+        @test Array(@jit(solve_tridiag_adj_2707(dl_r, d_r, du_r, b_r))) ≈
+            solve_tridiag_adj_2707(dl, d, du, b) atol = 1e-4 rtol = 1e-3
+        @test Array(@jit(solve_tridiag_ldiv_2707(dl_r, d_r, du_r, b_r))) ≈
+            solve_tridiag_2707(dl, d, du, b) atol = 1e-4 rtol = 1e-3
+
+        @test Array(@jit(solve_symtridiag_2707(d_r, dl_r, b_r))) ≈
+            solve_symtridiag_2707(d, dl, b) atol = 1e-4 rtol = 1e-3
+        @test Array(@jit(solve_symtridiag_2707(d_r, dl_r, B_r))) ≈
+            solve_symtridiag_2707(d, dl, B) atol = 1e-4 rtol = 1e-3
+        @test Array(@jit(solve_symtridiag_shift_2707(d_r, dl_r, b_r, real(T)(0.5)))) ≈
+            solve_symtridiag_shift_2707(d, dl, b, real(T)(0.5)) atol = 1e-4 rtol = 1e-3
+        @test Array(
+            @jit(solve_symtridiag_shift_2707(d_r, dl_r, b_r, ConcreteRNumber(real(T)(0.5))))
+        ) ≈ solve_symtridiag_shift_2707(d, dl, b, real(T)(0.5)) atol = 1e-4 rtol = 1e-3
+    end
+end
+
 @testset "LU Factorization" begin
     @testset "Un-batched" begin
         @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
