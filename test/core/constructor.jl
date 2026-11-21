@@ -190,3 +190,67 @@ end
         @test Array(Adapt.adapt(ConcreteRArray, dev_arr)) == Float32[1 2; 3 4]
     end
 end
+
+struct MockRectiGrid2899{TX,TY,E} <: AbstractMatrix{E}
+    x::TX
+    y::TY
+end
+function MockRectiGrid2899(x::AbstractVector, y::AbstractVector)
+    E = NamedTuple{(:X, :Y),Tuple{eltype(x),eltype(y)}}
+    return MockRectiGrid2899{typeof(x),typeof(y),E}(x, y)
+end
+Base.size(g::MockRectiGrid2899) = (length(g.x), length(g.y))
+Base.getindex(g::MockRectiGrid2899, i::Int, j::Int) = (X=g.x[i], Y=g.y[j])
+
+mutable struct MutableRectiGrid2899{T,E} <: AbstractVector{E}
+    offset::T
+    scale::T
+end
+function MutableRectiGrid2899(offset::T, scale::T) where {T}
+    E = NamedTuple{(:V,),Tuple{T}}
+    return MutableRectiGrid2899{T,E}(offset, scale)
+end
+Base.size(::MutableRectiGrid2899) = (4,)
+Base.getindex(g::MutableRectiGrid2899, i::Int) = (V=g.offset + i * g.scale,)
+
+function make_linrange_grid_2899(fovx, fovy)
+    return MockRectiGrid2899(
+        range(-fovx / 2, fovx / 2; length=8), range(-fovy / 2, fovy / 2; length=6)
+    )
+end
+
+grid_endpoints_sum_2899(g::MockRectiGrid2899) = first(g.x) + last(g.y)
+
+function shift_mutable_grid_2899!(g::MutableRectiGrid2899)
+    g.offset = g.offset + g.scale
+    return nothing
+end
+
+function bump_vec_rnum_2899!(v::Vector)
+    v[2] = v[1] + v[2]
+    return nothing
+end
+
+@testset "Custom AbstractArray with ConcreteRNumber fields (#2899)" begin
+    g_step = Reactant.to_rarray(
+        MockRectiGrid2899(-0.5:0.125:0.375, -1.0:0.5:1.5); track_numbers=Number
+    )
+    @test !(isbitstype(eltype(g_step)))
+    res_step = @jit grid_endpoints_sum_2899(g_step)
+    @test res_step ≈ (-0.5) + 1.5
+
+    g_lin = @jit make_linrange_grid_2899(ConcreteRNumber(1.0), ConcreteRNumber(3.0))
+    @test !(isbitstype(eltype(g_lin)))
+    res_lin = @jit grid_endpoints_sum_2899(g_lin)
+    @test res_lin ≈ (-0.5) + 1.5
+
+    mg = MutableRectiGrid2899(ConcreteRNumber(2.0), ConcreteRNumber(0.5))
+    @jit shift_mutable_grid_2899!(mg)
+    @test mg.offset ≈ 2.5
+    @test mg.scale ≈ 0.5
+
+    vr = [ConcreteRNumber(3.0), ConcreteRNumber(4.0)]
+    @jit bump_vec_rnum_2899!(vr)
+    @test vr[1] ≈ 3.0
+    @test vr[2] ≈ 7.0
+end
