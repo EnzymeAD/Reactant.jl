@@ -7,6 +7,7 @@
     TracedToTypes = 6
     NoStopTracedTrack = 7
     TracedToJAX = 8
+    ArrayToTraced = 9
 end
 
 function convert_to_jax_dtype_struct end
@@ -69,8 +70,12 @@ Base.@nospecializeinfer function traced_type_inner(
         else
             error("Unsupported runtime $runtime")
         end
-    elseif (mode == NoStopTracedTrack || mode == TracedTrack || mode == TracedSetPath) &&
-        T <: track_numbers
+    elseif (
+        mode == NoStopTracedTrack ||
+        mode == TracedTrack ||
+        mode == TracedSetPath ||
+        mode == ArrayToTraced
+    ) && T <: track_numbers
         return TracedRNumber{T}
     end
     return T
@@ -363,7 +368,10 @@ Base.@nospecializeinfer function traced_type_inner(
         error("Unsupported runtime $runtime")
     elseif mode == TracedToJAX
         return jax_dtype_struct_type(T)
-    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath
+    elseif mode == TracedTrack ||
+        mode == NoStopTracedTrack ||
+        mode == TracedSetPath ||
+        mode == ArrayToTraced
         return T
     else
         throw("Abstract RArray cannot be made concrete in mode $mode")
@@ -395,7 +403,10 @@ Base.@nospecializeinfer function traced_type_inner(
         error("Unsupported runtime $runtime")
     elseif mode == TracedToJAX
         return jax_dtype_struct_type(T)
-    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath
+    elseif mode == TracedTrack ||
+        mode == NoStopTracedTrack ||
+        mode == TracedSetPath ||
+        mode == ArrayToTraced
         return T
     else
         throw("Abstract RNumber cannot be made concrete in mode $mode")
@@ -497,6 +508,10 @@ Base.@nospecializeinfer function traced_type_inner(
             else
                 error("Unsupported runtime $runtime")
             end
+        elseif mode == ArrayToTraced &&
+            (T <: ReactantPrimitive || (T !== Union{} && T <: TracedRNumber))
+            A_wrapper = TracedRArray
+            traced_T = unwrapped_eltype(T)
         end
 
         # WARN replacing typevars first is required to construct the UnionAlls correctly
@@ -519,6 +534,11 @@ Base.@nospecializeinfer function traced_type_inner(
                 end
             end
             error("Unsupported runtime $runtime")
+        elseif mode == ArrayToTraced &&
+            (T <: ReactantPrimitive || (T !== Union{} && T <: TracedRNumber))
+            return TracedRArray{unwrapped_eltype(T),N}
+        elseif mode == ArrayToTraced && T <: Number && reactant_primitive(T) !== nothing
+            return TracedRArray{reactant_primitive(T),N}
         else
             return Array{
                 traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime),N
@@ -535,7 +555,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(ndevices),
     @nospecialize(runtime)
 )
-    if mode == ArrayToConcrete
+    if mode == ArrayToConcrete || mode == ArrayToTraced
         A´ = A isa UnionAll ? Array{Bool} : Array{Bool,ndims(A)}
         return traced_type_inner(A´, seen, mode, track_numbers, ndevices, runtime)
     else
@@ -632,7 +652,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(ndevices),
     @nospecialize(runtime)
 )
-    if mode == ArrayToConcrete
+    if mode == ArrayToConcrete || mode == ArrayToTraced
         return ReactantRNG{
             traced_type_inner(Array{UInt64,1}, seen, mode, track_numbers, ndevices, runtime)
         }
@@ -889,7 +909,7 @@ Base.@nospecializeinfer function traced_type_inner(
             enum_basetype(T), seen, mode, track_numbers, ndevices, runtime
         )
         return ConcreteEnum{T,N}
-    elseif mode == NoStopTracedTrack
+    elseif mode == NoStopTracedTrack || mode == ArrayToTraced
         return TracedEnum{T}
     end
     return T
@@ -1563,6 +1583,7 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(runtime = nothing),
     kwargs...,
 ) where {T,N}
+    mode == ArrayToTraced && return prev
     if mode == ConcreteToTraced
         throw("Cannot trace existing trace type")
     end
@@ -1652,6 +1673,7 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(runtime = nothing),
     kwargs...,
 ) where {T}
+    mode == ArrayToTraced && return prev
     if mode == ConcreteToTraced
         throw("Cannot trace existing trace type")
     end
@@ -1733,6 +1755,7 @@ end
 Base.@nospecializeinfer function make_tracer(
     seen, @nospecialize(prev::MissingTracedValue), @nospecialize(path), mode; kwargs...
 )
+    mode == ArrayToTraced && return prev
     if mode == ConcreteToTraced
         throw("Cannot trace existing trace type")
     end
@@ -1794,6 +1817,8 @@ Base.@nospecializeinfer function make_tracer(
             runtime isa Val{:IFRT} &&
                 return ConcreteIFRTNumber(prev; sharding, device, client)
             error("Unsupported runtime $runtime")
+        elseif mode == ArrayToTraced
+            return promote_to(TracedRNumber{RT}, prev)
         else
             if mode == TracedTrack || mode == NoStopTracedTrack
                 res = TracedRNumber{RT}((path,), broadcast_to_size(prev, ()).mlir_data)
@@ -1886,19 +1911,28 @@ Base.@nospecializeinfer function make_tracer(
         end
         return seen[prev]
     end
-    if eltype(RT) <: ReactantPrimitive
+    ET = eltype(RT)
+    if ET <: ReactantPrimitive
         if mode == ArrayToConcrete
             runtime isa Val{:PJRT} &&
                 (return seen[prev] = ConcretePJRTArray(prev; sharding, device, client))
             runtime isa Val{:IFRT} &&
                 (return seen[prev] = ConcreteIFRTArray(prev; sharding, device, client))
             error("Unsupported runtime $runtime")
+        elseif mode == ArrayToTraced
+            return seen[prev] = promote_to(TracedRArray{ET,ndims(RT)}, prev)
         elseif mode == TracedToTypes
             # Original array can get mutated so we store a copy:
             push!(path, copy(prev))
             seen[prev] = VisitedObject(length(seen) + 1)
             return nothing
         end
+    elseif mode == ArrayToTraced && ET !== Union{} && ET <: TracedRNumber
+        return seen[prev] = promote_to(TracedRArray{unwrapped_eltype(ET),ndims(RT)}, prev)
+    elseif mode == ArrayToTraced && ET <: Number && reactant_primitive(ET) !== nothing
+        return seen[prev] = promote_to(
+            TracedRArray{reactant_primitive(ET),ndims(RT)}, map(to_reactant_primitive, prev)
+        )
     elseif mode == TracedToTypes
         push!(path, RT)
         for I in eachindex(prev)
@@ -1955,7 +1989,7 @@ end
 Base.@nospecializeinfer function make_tracer(
     seen, @nospecialize(prev::BitArray), @nospecialize(path), mode; kwargs...
 )
-    if mode == ArrayToConcrete
+    if mode == ArrayToConcrete || mode == ArrayToTraced
         return make_tracer(seen, Array(prev), path, mode; kwargs...)
     else
         return prev
@@ -1983,19 +2017,28 @@ Base.@nospecializeinfer function make_tracer(
         end
         return seen[prev]
     end
-    if eltype(RT) <: ReactantPrimitive
+    ET = eltype(RT)
+    if ET <: ReactantPrimitive
         if mode == ArrayToConcrete
             runtime isa Val{:PJRT} &&
                 (return seen[prev] = ConcretePJRTArray(prev; sharding, device, client))
             runtime isa Val{:IFRT} &&
                 (return seen[prev] = ConcreteIFRTArray(prev; sharding, device, client))
             error("Unsupported runtime $runtime")
+        elseif mode == ArrayToTraced
+            return seen[prev] = promote_to(TracedRArray{ET,ndims(RT)}, prev)
         elseif mode == TracedToTypes
             # Original array can get mutated so we store a copy:
             push!(path, copy(prev))
             seen[prev] = VisitedObject(length(seen) + 1)
             return nothing
         end
+    elseif mode == ArrayToTraced && ET !== Union{} && ET <: TracedRNumber
+        return seen[prev] = promote_to(TracedRArray{unwrapped_eltype(ET),ndims(RT)}, prev)
+    elseif mode == ArrayToTraced && ET <: Number && reactant_primitive(ET) !== nothing
+        return seen[prev] = promote_to(
+            TracedRArray{reactant_primitive(ET),ndims(RT)}, map(to_reactant_primitive, prev)
+        )
     elseif mode == TracedToTypes
         push!(path, RT)
         for (k, v) in prev
@@ -2197,7 +2240,7 @@ end
 Base.@nospecializeinfer function make_tracer(
     seen, @nospecialize(prev::Random.AbstractRNG), @nospecialize(path), mode; kwargs...
 )
-    if mode == ArrayToConcrete
+    if mode == ArrayToConcrete || mode == ArrayToTraced
         TracedRandom.should_warn_if_not_natively_supported(prev)
         return ReactantRNG(
             make_tracer(seen, TracedRandom.make_seed(prev), (path..., 1), mode; kwargs...),
@@ -2274,6 +2317,27 @@ end
         x,
         (),
         ArrayToConcrete;
+        track_numbers,
+        sharding,
+        runtime,
+        device,
+        client,
+    )
+end
+
+@inline function to_traced_internal(
+    @nospecialize(x),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime),
+    @nospecialize(device),
+    @nospecialize(client)
+)
+    return make_tracer(
+        OrderedIdDict(),
+        x,
+        (),
+        ArrayToTraced;
         track_numbers,
         sharding,
         runtime,
@@ -2595,6 +2659,8 @@ Base.@nospecializeinfer function make_tracer(
             ConcreteIFRTNumber(Integer(prev); sharding, device, client)
         )
         error("Unsupported runtime $runtime")
+    elseif mode == ArrayToTraced
+        return TracedEnum{RT}(promote_to(TracedRNumber{enum_basetype(RT)}, Integer(prev)))
     elseif mode == NoStopTracedTrack
         # Plain enum branch results need the same constant promotion as numbers.
         payload = make_tracer(
