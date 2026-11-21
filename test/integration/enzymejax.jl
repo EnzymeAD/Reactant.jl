@@ -226,6 +226,7 @@ end
 
             # Check that Python script does NOT include explicit sharding directives
             python_content = read(python_file_path, String)
+            @test !contains(python_content, "SHARDING_METADATA")
             # Should have hlo_call but without the advanced sharding setup
             @test @filecheck begin
                 @check "hlo_call"
@@ -237,6 +238,108 @@ end
                 python_file_path, "run_f_sharded_no_preserve"
             )
             @test isapprox(Array(result), expected_result; atol=1e-5, rtol=1e-5)
+        end
+
+        @testset "Export sharding attributes (is_closed, priority, subaxes)" begin
+            x_data = Reactant.TestUtils.construct_test_array(Float32, 4, 8)
+            y_data = Reactant.TestUtils.construct_test_array(Float32, 4, 8)
+            z_data = Reactant.TestUtils.construct_test_array(Float32, 8, 4)
+
+            sharding_x = Reactant.Sharding.NamedSharding(
+                mesh, ("batch", "feature"); is_closed=(false, true), priority=(2, 5)
+            )
+            sharding_y = Reactant.Sharding.NamedSharding(
+                mesh,
+                (nothing, "feature");
+                subaxes=[[nothing], [(2, 2)]],
+                is_closed=(true, false),
+                priority=(-1, 3),
+            )
+            sharding_z = Reactant.Sharding.NamedSharding(
+                mesh, (("batch", "feature"), nothing); is_closed=(false, false)
+            )
+
+            x = Reactant.to_rarray(x_data; sharding=sharding_x)
+            y = Reactant.to_rarray(y_data; sharding=sharding_y)
+            z = Reactant.to_rarray(z_data; sharding=sharding_z)
+
+            info_x = Reactant.Serialization.EnzymeJAX._extract_sharding_info(x)
+            @test info_x.type == "NamedSharding"
+            @test info_x.is_closed == (false, true)
+            @test info_x.priority == (2, 5)
+            @test info_x.subaxes == [[nothing], [nothing]]
+
+            info_y = Reactant.Serialization.EnzymeJAX._extract_sharding_info(y)
+            @test info_y.type == "NamedSharding"
+            @test info_y.is_closed == (true, false)
+            @test info_y.priority == (-1, 3)
+            @test info_y.subaxes == [[nothing], [(2, 2)]]
+
+            info_z = Reactant.Serialization.EnzymeJAX._extract_sharding_info(z)
+            @test info_z.is_closed == (false, false)
+            @test info_z.priority == (-1, -1)
+
+            expected_xy = x_data + y_data
+            python_file_path = Reactant.Serialization.export_to_enzymejax(
+                +,
+                x,
+                y;
+                output_dir=mktempdir(; cleanup=true),
+                function_name="f_sharded_attrs",
+                preserve_sharding=true,
+            )
+            @test isfile(python_file_path)
+
+            python_content = read(python_file_path, String)
+            @test contains(python_content, "SHARDING_METADATA")
+            @test contains(python_content, "\"is_closed\": (True, False)")
+            @test contains(python_content, "\"priority\": (5, 2)")
+            @test contains(python_content, "\"is_closed\": (False, True)")
+            @test contains(python_content, "\"priority\": (3, -1)")
+            @test contains(python_content, "\"subaxes\": (((2, 2),), (None,))")
+            @test contains(
+                python_content,
+                "#sdy.sharding<@mesh, [{\\\"feature\\\"}p5, {\\\"batch\\\", ?}p2]>",
+            )
+            @test contains(
+                python_content, "#sdy.sharding<@mesh, [{\\\"feature\\\":(2)2, ?}p3, {}]>"
+            )
+            @test contains(
+                python_content,
+                "jax.make_mesh((2, 2, 2), ('batch', 'feature_sub_0', 'feature_sub_1'), (jax.sharding.AxisType.Auto,) * 3)",
+            )
+            @test contains(
+                python_content,
+                "jax.sharding.NamedSharding(mesh0, P(('feature_sub_0', 'feature_sub_1'), 'batch'))",
+            )
+            @test contains(
+                python_content,
+                "jax.sharding.NamedSharding(mesh0, P('feature_sub_1', None))",
+            )
+
+            result_xy = run_exported_enzymejax_function(
+                python_file_path, "run_f_sharded_attrs"
+            )
+            @test isapprox(Array(result_xy), expected_xy; atol=1e-5, rtol=1e-5)
+
+            expected_z = -z_data
+            python_file_path_z = Reactant.Serialization.export_to_enzymejax(
+                -,
+                z;
+                output_dir=mktempdir(; cleanup=true),
+                function_name="f_sharded_multiaxis",
+                preserve_sharding=true,
+            )
+            python_content_z = read(python_file_path_z, String)
+            @test contains(
+                python_content_z,
+                "jax.sharding.NamedSharding(mesh0, P(None, ('batch', 'feature')))",
+            )
+            @test contains(python_content_z, "\"is_closed\": (False, False)")
+            result_z = run_exported_enzymejax_function(
+                python_file_path_z, "run_f_sharded_multiaxis"
+            )
+            @test isapprox(Array(result_z), expected_z; atol=1e-5, rtol=1e-5)
         end
     else
         @warn "Skipping sharding tests: insufficient devices (need ≥8, have $(length(addressable_devices)))"
