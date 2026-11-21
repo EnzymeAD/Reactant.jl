@@ -1003,6 +1003,29 @@ function Base.mapslices(f::F, A::TracedRArray; dims) where {F}
     return @opcall batch(f, A, dims)
 end
 
+function overloaded_mapreduce(
+    @nospecialize(f),
+    @nospecialize(op),
+    A::AbstractArray,
+    B::AbstractArray,
+    Cs::AbstractArray...;
+    dims=:,
+    init=Base._InitialValue(),
+)
+    if !allequal((axes(A), axes(B), axes.(Cs)...))
+        throw(
+            DimensionMismatch(
+                "all inputs to mapreduce must have the same indices, got $(axes(A)) and $(axes(B))",
+            ),
+        )
+    end
+    mapped = overloaded_map(f, A, B, Cs...)
+    if !(mapped isa AbstractArray)
+        mapped = Reactant.broadcast_to_size(mapped, size(A))
+    end
+    return overloaded_mapreduce(identity, op, mapped; dims, init)
+end
+
 # accumulate interface
 ## Taken from https://github.com/JuliaGPU/CUDA.jl/blob/a4a7af45f54f0e57f5912bb52db48e2d27cf7b4f/src/accumulate.jl#L201
 function Base.accumulate(
