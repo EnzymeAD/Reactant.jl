@@ -560,3 +560,35 @@ reflect_hasfield(x) = x .+ hasfield(KindOptions, :a)
     @test @jit(reflect_parentmodule(x)) ≈ [1.0 + length(string(@__MODULE__))]
     @test @jit(reflect_hasfield(x)) ≈ [2.0]
 end
+
+mutable struct UndefFieldStruct3506
+    a::Any
+    b::Any
+    UndefFieldStruct3506(a) = new(a)
+end
+
+mutable struct CyclicNode3506
+    x::Any
+    next::CyclicNode3506
+    function CyclicNode3506(x)
+        n = new(x)
+        n.next = n
+        return n
+    end
+end
+
+@testset "use_overlayed_version with #undef fields and cycles (#3506)" begin
+    u = UndefFieldStruct3506(1)
+    @test !Reactant.use_overlayed_version(u)
+
+    c = CyclicNode3506(1)
+    @test !Reactant.use_overlayed_version(c)
+
+    v_undef = Vector{Any}(undef, 3)
+    v_undef[1] = 42
+    @test !Reactant.use_overlayed_version(v_undef)
+
+    v_cyc = Any[]
+    push!(v_cyc, v_cyc)
+    @test !Reactant.use_overlayed_version(v_cyc)
+end
