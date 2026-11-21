@@ -518,10 +518,10 @@ Base.@nospecializeinfer function prepare_mlir_fn_args(
     in_tys = Vector{MLIR.IR.Type}(undef, length(linear_args))
     for (i, arg) in enumerate(linear_args)
         elT = MLIR.IR.Type(Reactant.unwrapped_eltype(arg))
-        if toscalar
+        sz = collect(Int, size(arg))
+        if toscalar && length(sz) == 0
             in_tys[i] = MLIR.IR.TensorType(Int[], elT)
         else
-            sz = collect(Int, size(arg))
             if !optimize_then_pad
                 carg = inv_map[arg]
                 Reactant.has_padding(carg) && (sz .+= Reactant.get_padding(carg))
@@ -1212,14 +1212,18 @@ function elem_apply_via_while_loop(
     return ReactantCore.materialize_traced_array(reshape(result, out_size))
 end
 
+function _unwrap_scalar_bcast_arg(arg)
+    if arg isa Base.RefValue
+        return arg[]
+    elseif arg isa Number || arg isa TracedRArray{<:Any,0}
+        return promote_to(TracedRNumber, arg)
+    end
+    return arg
+end
+
 function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     if all(iszero ∘ ndims, args)
-        scalar_args = map(args) do arg
-            if arg isa Number || arg isa TracedRArray{<:Any,0}
-                return promote_to(TracedRNumber, arg)
-            end
-            return arg
-        end
+        scalar_args = map(_unwrap_scalar_bcast_arg, args)
         return Reactant.call_with_reactant(f, scalar_args...)
     end
 
@@ -1241,13 +1245,14 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         string(f) * "_broadcast_scalar",
         false;
         toscalar=true,
+        do_transpose=false,
         argprefix,
         resprefix,
         resargprefix,
     )
     fnwrap = mlir_fn_res.fnwrapped
     func2 = mlir_fn_res.f
-    (; result, seen_args, linear_args, linear_results) = mlir_fn_res
+    (; result, seen_args, linear_args, linear_results, mutated_args) = mlir_fn_res
 
     invmap = IdDict()
     for (k, v) in seen_args
@@ -1301,11 +1306,15 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         push_val!(batch_inputs, ogarg, path[3:end])
 
         if ogarg isa Base.RefValue
+            ta = TracedRArray(batch_inputs[end])
             batch_inputs[end] =
                 (@opcall broadcast_in_dim(
-                    TracedRArray(batch_inputs[end]),
-                    Int64[],
-                    collect(Int64, input_shapes[1]),
+                    ta,
+                    collect(
+                        Int64,
+                        (length(input_shapes[1]) + 1):(length(input_shapes[1]) + ndims(ta)),
+                    ),
+                    collect(Int64, (input_shapes[1]..., size(ta)...)),
                 )).mlir_data
         end
     end
@@ -1313,17 +1322,19 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     OutShape = isempty(seen_args) ? nothing : first(input_shapes)
     @assert !isnothing(OutShape)
 
-    out_tys2 = MLIR.IR.Type[
-        MLIR.IR.TensorType(
-            collect(Int, OutShape), MLIR.IR.Type(Reactant.unwrapped_eltype(arg))
-        ) for arg in linear_results
-    ]
+    out_tys2 = Vector{MLIR.IR.Type}(undef, length(linear_results))
+    for (i, arg) in enumerate(linear_results)
+        out_tys2[i] = MLIR.IR.TensorType(
+            collect(Int, (OutShape..., size(arg)...)),
+            MLIR.IR.Type(Reactant.unwrapped_eltype(arg)),
+        )
+    end
 
     res = MLIR.Dialects.enzyme.batch(
         batch_inputs;
         outputs=out_tys2,
         fn=fname,
-        batch_shape=MLIR.IR.DenseArrayAttribute([Int64(i) for i in OutShape]),
+        batch_shape=MLIR.IR.DenseArrayAttribute(collect(Int64, OutShape)),
     )
 
     residx = 1
@@ -1350,6 +1361,21 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
                 end
 
                 if ogarg isa Base.RefValue
+                    was_mutated = false
+                    for i in mutated_args
+                        if linear_args[i] === a
+                            was_mutated = true
+                            break
+                        end
+                    end
+                    if !any(iszero, OutShape) && was_mutated
+                        ta = TracedRArray(resv)
+                        starts = vcat(collect(Int64, OutShape), ones(Int64, ndims(a)))
+                        limits = collect(Int64, (OutShape..., size(a)...))
+                        sliced = @opcall slice(ta, starts, limits)
+                        reshaped = @opcall reshape(sliced, collect(Int64, size(a)))
+                        set!(ogarg, path[3:end], reshaped.mlir_data)
+                    end
                     continue
                 end
 
