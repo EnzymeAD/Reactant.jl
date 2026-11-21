@@ -567,6 +567,32 @@ end
     end
 end
 
+function make_replicated_ifrt_2917(data, mesh, client)
+    return Reactant.ConcreteIFRTArray(data; client, sharding=Sharding.Replicated(mesh))
+end
+
+step_replicated_nt_2917(ps) = (; w=ps.w .+ 1.0f0)
+
+@testset "Sharding.Replicated ConcreteIFRTArray padding type stability (#2917)" begin
+    if Reactant.XLA.runtime() isa Val{:IFRT} && length(addressable_devices) >= 2
+        mesh = Sharding.Mesh(reshape(collect(addressable_devices)[1:2], 2, 1), (:x, :y))
+        data = ones(Float32, 3, 5)
+        client = Reactant.XLA.default_backend()
+
+        arr = @inferred make_replicated_ifrt_2917(data, mesh, client)
+        @test arr isa Reactant.ConcreteIFRTArray{Float32,2,Nothing}
+
+        ps = Reactant.to_rarray((; w=data); sharding=Sharding.Replicated(mesh))
+        @test typeof(ps) === @NamedTuple{w::Reactant.ConcreteIFRTArray{Float32,2,Nothing}}
+
+        compiled_step = Reactant.@compile step_replicated_nt_2917(ps)
+        ps2 = compiled_step(ps)
+        @test typeof(ps2) === typeof(ps)
+        ps3 = compiled_step(ps2)
+        @test Array(ps3.w) ≈ fill(3.0f0, 3, 5)
+    end
+end
+
 #=
 # FIXME: This is commented out since it causes a segfault currently
 @testset "InterpolateArray" begin

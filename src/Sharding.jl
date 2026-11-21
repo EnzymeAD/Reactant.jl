@@ -777,10 +777,32 @@ function NamedSharding(sharding::Replicated, ndims::Int)
     return NamedSharding(sharding.mesh, ntuple(Returns(nothing), ndims))
 end
 
+_has_non_nothing_axis(ps) = any(!isnothing, ps)
+can_have_padding(::AbstractSharding) = true
+can_have_padding(::NoSharding) = false
+can_have_padding(::Replicated) = false
+can_have_padding(s::NamedSharding) = any(_has_non_nothing_axis, s.partition_spec)
+
 function (sharding::Replicated)(
     client::XLA.AbstractClient, device, x::Union{AbstractArray,Number}
 )
     return (NamedSharding(sharding, ndims(x)))(client, device, x)
+end
+
+function (sharding::Replicated)(client::XLA.IFRT.Client, _, x::Union{AbstractArray,Number})
+    named = NamedSharding(sharding, ndims(x))
+    device_to_array_slices = sharding_to_array_slices(
+        named, size(x); client, return_updated_sharding=Val(false)
+    )
+    ifrt_sharding = XLA.IFRT.Sharding(
+        vec(XLA.get_device.((client,), sharding.mesh.device_ids)),
+        convert(HloSharding, named).hlo_sharding,
+    )
+    return (
+        XLA.IFRT.AsyncArray(client, x, ifrt_sharding),
+        ShardInfo(named, device_to_array_slices),
+        nothing,
+    )
 end
 
 function (sharding::Replicated)(client::XLA.PJRT.Client, dev, S::Type, dims::Dims)
