@@ -1,5 +1,6 @@
-using Test
+using Enzyme
 using Reactant
+using Test
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
 
@@ -72,6 +73,83 @@ end
     @test (@jit mul_re(x)) == Complex(42.0f0, 0.0f0)
     @test (@jit mul_re_im(x)) == Complex(42.0f0, 42.0f0)
     @test (@jit mul_nothing(x)) == Complex(0.0f0, 0.0f0)
+end
+
+@testset "broadcasting with im / 1im (#3395)" begin
+    fns = (
+        (x, y) -> x .- im .* y,
+        (x, y) -> x .- 1im .* y,
+        (x, y) -> im .* x,
+        (x, y) -> x .* 1im,
+        (x, y) -> x .+ im,
+        (x, y) -> x .+ 1im,
+        (x, y) -> x ./ im,
+        (x, y) -> im ./ x,
+        (x, y) -> x .^ im,
+        (x, y) -> exp.(im .* x),
+        (x, y) -> ((a, b) -> a * im + b).(x, y),
+        (x, y) -> x .+ ComplexF16(1, 2),
+        (x, y) -> x .* Ref(im),
+    )
+
+    @testset "$(T)" for T in (Float32, Float64, ComplexF32, ComplexF64)
+        skip_test = RunningOnTPU && (T == Float64 || T == ComplexF64)
+        x = Reactant.TestUtils.construct_test_array(T, 3)
+        y = Reactant.TestUtils.construct_test_array(T, 3)
+        x_ra = Reactant.to_rarray(x)
+        y_ra = Reactant.to_rarray(y)
+
+        @testset for f in fns
+            # eltype must follow Base's promotion (e.g. `Float32 * im` is `ComplexF32`)
+            @test begin
+                ref = f(x, y)
+                res = @jit f(x_ra, y_ra)
+                res isa Reactant.AbstractConcreteArray{eltype(ref)} && Array(res) ≈ ref
+            end skip = skip_test
+        end
+
+        # 0-dimensional broadcast with a traced scalar / 0-d array
+        x_rn = ConcreteRNumber(x[1])
+        @test @jit(x_rn .* im) ≈ x[1] * im skip = skip_test
+        @test @jit(x_rn .+ 1im) ≈ x[1] + 1im skip = skip_test
+        @test @jit(x_rn .* Ref(im)) ≈ x[1] * im skip = skip_test
+        x_0d = Reactant.to_rarray(fill(x[1]))
+        @test @jit(x_0d .* im) ≈ fill(x[1]) .* im skip = skip_test
+    end
+
+    @testset "in-place and autodiff" begin
+        x = Float32[1, 2, 3]
+        y = Float32[4, 5, 6]
+        x_ra = Reactant.to_rarray(x)
+        y_ra = Reactant.to_rarray(y)
+
+        inplace_expr!(d, a, b) = (d .= a .- im .* b; return nothing)
+        dest = Reactant.to_rarray(zeros(ComplexF32, 3))
+        @jit inplace_expr!(dest, x_ra, y_ra)
+        @test Array(dest) ≈ x .- im .* y
+
+        loss_im(a, b) = sum(abs2, a .- im .* b)
+        grad_im(a, b, da, db) = begin
+            Enzyme.autodiff(Reverse, loss_im, Active, Duplicated(a, da), Duplicated(b, db))
+            return da, db
+        end
+        dx_ra = Reactant.to_rarray(zeros(Float32, 3))
+        dy_ra = Reactant.to_rarray(zeros(Float32, 3))
+        @jit grad_im(x_ra, y_ra, dx_ra, dy_ra)
+        @test Array(dx_ra) ≈ 2 .* x
+        @test Array(dy_ra) ≈ 2 .* y
+    end
+
+    # XLA only supports ComplexF32 and ComplexF64; make sure unsupported complex element
+    # types fail with a clear error message instead of crashing or returning garbage.
+    int_ra = Reactant.to_rarray([1, 2, 3])
+    @test_throws "eltype of complex must be Float32 or Float64" @jit(int_ra .* 1im)
+    @test_throws "eltype of complex must be Float32 or Float64" @jit(int_ra .* im)
+    @test_throws "eltype of complex must be Float32 or Float64" @jit(
+        ConcreteRNumber(1) * im
+    )
+    f16_ra = Reactant.to_rarray(Float16[1, 2])
+    @test_throws "eltype of complex must be Float32 or Float64" @jit(f16_ra .* im)
 end
 
 @testset "complex reduction" begin
