@@ -26,3 +26,29 @@ end
     hlo = @code_hlo Optimisers.update(st_opt, ps, gs)
     @test length(findall("stablehlo.broadcast_in_dim", repr(hlo))) == 2
 end
+
+@testset "Eager & Compiled Adam and RAdam (#3339)" begin
+    for Opt in (Optimisers.Adam, Optimisers.RAdam)
+        ps_jl = (a=Float64[1.0, 2.0, 3.0], b=Float64[4.0, 5.0])
+        gs_jl = (a=Float64[0.1, -0.2, 0.3], b=Float64[-0.4, 0.5])
+
+        st_jl = Optimisers.setup(Opt(), deepcopy(ps_jl))
+        st_jl, ps_jl_new = Optimisers.update(st_jl, deepcopy(ps_jl), gs_jl)
+
+        # Eager update on ConcreteRArray (hits lazy nested broadcast in `subtract!`)
+        ps_ra = Reactant.to_rarray(deepcopy(ps_jl))
+        gs_ra = Reactant.to_rarray(deepcopy(gs_jl))
+        st_ra = Optimisers.setup(Opt(), ps_ra)
+        st_ra, ps_ra_new = Optimisers.update!(st_ra, ps_ra, gs_ra)
+        @test Array(ps_ra_new.a) ≈ ps_jl_new.a
+        @test Array(ps_ra_new.b) ≈ ps_jl_new.b
+
+        # Compiled update
+        ps_ra2 = Reactant.to_rarray(deepcopy(ps_jl))
+        gs_ra2 = Reactant.to_rarray(deepcopy(gs_jl))
+        st_ra2 = @jit Optimisers.setup(Opt(), ps_ra2)
+        st_ra2, ps_ra2_new = @jit Optimisers.update(st_ra2, ps_ra2, gs_ra2)
+        @test Array(ps_ra2_new.a) ≈ ps_jl_new.a
+        @test Array(ps_ra2_new.b) ≈ ps_jl_new.b
+    end
+end
