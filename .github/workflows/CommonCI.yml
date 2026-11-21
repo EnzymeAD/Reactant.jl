@@ -84,6 +84,23 @@ jobs:
           mkdir -p "$TMPDIR"
           echo "TMPDIR=$TMPDIR" >> $GITHUB_ENV
 
+      - name: Set TMPDIR and create directory (Windows)
+        # Same idea as the step above, but Julia's `tempdir()` goes through libuv's
+        # `uv_os_tmpdir`, which on Windows calls `GetTempPath` and so only consults
+        # TMP/TEMP -- TMPDIR alone would have no effect. Without this the temporary
+        # directory lives outside the workspace, and the "Upload MLIR modules" step
+        # below silently uploads nothing (`No files were found with the provided
+        # path: **/*.mlir`), which loses the module dumps written when a pass
+        # pipeline fails.
+        if: ${{ startsWith(inputs.os, 'windows-') }}
+        shell: pwsh
+        run: |
+          $tmp = Join-Path $env:GITHUB_WORKSPACE 'tmp'
+          New-Item -ItemType Directory -Force -Path $tmp | Out-Null
+          "TMPDIR=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "TMP=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "TEMP=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Append
+
       - uses: julia-actions/setup-julia@v3
         if: ${{ ! inputs.assertions }}
         with:
