@@ -388,6 +388,56 @@ end
     @test @jit(any(<(0), xr)) == any(<(0), Array(xr))
 end
 
+@testset "any/all/in and wrapped mapreduce on concrete arrays don't scalar index #3554" begin
+    x = Float32[1.0 0.0; NaN 2.0]
+    xr = Reactant.to_rarray(x)
+    xb = Reactant.to_rarray(x .== 0)
+    xzero = Reactant.to_rarray(zeros(Float32, 2, 2))
+    xempty = Reactant.to_rarray(zeros(Float32, 0, 2))
+    xnum = Reactant.to_rarray(Float32[1 2; 3 4])
+
+    @test which(any, Tuple{typeof(isnan),typeof(xr)}).module === Reactant
+    @test which(all, Tuple{typeof(iszero),typeof(xr)}).module === Reactant
+    @test which(any, Tuple{typeof(isnan),typeof(@view(xr[:, 1]))}).module === Reactant
+    @test which(Base.mapreduce, Tuple{typeof(identity),typeof(+),typeof(xr')}).module ===
+        Reactant
+
+    # Disallow scalar indexing for the duration of the test (as in an interactive
+    # session, or on a non-CPU device) so an iterating fallback would error.
+    task_local_storage(:ScalarIndexing, Reactant.GPUArraysCore.ScalarDisallowed) do
+        @test any(isnan, xr) isa Bool
+        @test any(isnan, xr) == any(isnan, x)
+        @test all(iszero, xr) == all(iszero, x)
+        @test all(iszero, xzero)
+        @test iszero(xzero)
+        @test !iszero(xr)
+        @test any(xb) == any(x .== 0)
+        @test all(xb) == all(x .== 0)
+        @test !any(isnan, xempty)
+        @test all(iszero, xempty)
+        @test Array(any(isnan, xr; dims=1)) == any(isnan, x; dims=1)
+        @test Array(all(iszero, xr; dims=2)) == all(iszero, x; dims=2)
+
+        @test (0.0f0 in xr) === true
+        @test (5.0f0 in xr) === false
+        @test ("not a number" in xr) === false
+
+        # Wrapped concrete arrays (Adjoint, Transpose, SubArray)
+        @test any(isnan, xr') == any(isnan, x')
+        @test all(iszero, xzero')
+        @test iszero(xzero')
+        @test any(isnan, transpose(xr)) == any(isnan, transpose(x))
+        @test any(isnan, @view(xr[:, 1])) == any(isnan, @view(x[:, 1]))
+        @test all(iszero, @view(xr[:, 2])) == all(iszero, @view(x[:, 2]))
+        @test any(@view(xb[:, 2])) == any(@view((x .== 0)[:, 2]))
+        @test all(@view(xb[1, :])) == all(@view((x .== 0)[1, :]))
+        @test Float32(sum(xnum')) == 10.0f0
+        @test Float32(sum(@view(xnum[:, 1]))) == 4.0f0
+        @test (1.0f0 in @view(xr[:, 1])) === true
+        @test (2.0f0 in @view(xr[:, 1])) === false
+    end
+end
+
 zip_iterator(a, b) = mapreduce(splat(*), +, zip(a, b))
 zip_iterator2(a, b) = mapreduce(splat(.-), +, zip(a, b))
 enumerate_iterator(a) = mapreduce(splat(*), +, enumerate(a))
