@@ -129,3 +129,56 @@ end
     z = Reactant.to_rarray([1e-8, 0.001, 2.0])
     @test SpecialFunctions.zeta.(Array(s), Array(z)) ≈ @jit SpecialFunctions.zeta.(s, z)
 end
+
+bcast_erf_2874(z) = SpecialFunctions.erf.(z)
+bcast_erfc_2874(z) = SpecialFunctions.erfc.(z)
+bcast_erfcx_2874(z) = SpecialFunctions.erfcx.(z)
+bcast_erfi_2874(z) = SpecialFunctions.erfi.(z)
+bcast_dawson_2874(z) = SpecialFunctions.dawson.(z)
+bcast_faddeeva_2874(z) = SpecialFunctions.faddeeva.(z)
+
+@testset "complex erf family (#2874)" begin
+    @testset for CT in (ComplexF32, ComplexF64)
+        CT == ComplexF64 && RunningOnTPU && continue
+        rtol = CT == ComplexF32 ? 1.0f-4 : 1e-11
+        atol = CT == ComplexF32 ? 1.0f-5 : 1e-13
+
+        z0 = CT(1.0 + 0.5im)
+        @test @jit(SpecialFunctions.erf(ConcreteRNumber(z0))) ≈ SpecialFunctions.erf(z0) rtol =
+            rtol atol = atol
+        @test @jit(SpecialFunctions.erfc(ConcreteRNumber(z0))) ≈ SpecialFunctions.erfc(z0) rtol =
+            rtol atol = atol
+        @test @jit(SpecialFunctions.erfcx(ConcreteRNumber(z0))) ≈ SpecialFunctions.erfcx(z0) rtol =
+            rtol atol = atol
+        @test @jit(SpecialFunctions.erfi(ConcreteRNumber(z0))) ≈ SpecialFunctions.erfi(z0) rtol =
+            rtol atol = atol
+        @test @jit(SpecialFunctions.dawson(ConcreteRNumber(z0))) ≈
+            SpecialFunctions.dawson(z0) rtol = rtol atol = atol
+        @test @jit(SpecialFunctions.faddeeva(ConcreteRNumber(z0))) ≈
+            SpecialFunctions.faddeeva(z0) rtol = rtol atol = atol
+
+        zs = CT[
+            0.0 + 0.0im, 0.1 - 0.2im, -0.3 + 0.4im, 1.0 + 0.5im, -1.5 - 0.8im, 3.0 + 1.2im
+        ]
+        zs_ra = Reactant.to_rarray(zs)
+        @test Array(@jit(bcast_erf_2874(zs_ra))) ≈ SpecialFunctions.erf.(zs) rtol = rtol atol =
+            atol
+        @test Array(@jit(bcast_erfc_2874(zs_ra))) ≈ SpecialFunctions.erfc.(zs) rtol = rtol atol =
+            atol
+        @test Array(@jit(bcast_erfcx_2874(zs_ra))) ≈ SpecialFunctions.erfcx.(zs) rtol = rtol atol =
+            atol
+        @test Array(@jit(bcast_erfi_2874(zs_ra))) ≈ SpecialFunctions.erfi.(zs) rtol = rtol atol =
+            atol
+        @test Array(@jit(bcast_dawson_2874(zs_ra))) ≈ SpecialFunctions.dawson.(zs) rtol =
+            rtol atol = atol
+        @test Array(@jit(bcast_faddeeva_2874(zs_ra))) ≈ SpecialFunctions.faddeeva.(zs) rtol =
+            rtol atol = atol
+    end
+
+    @test @jit(SpecialFunctions.erfi(ConcreteRNumber(0.5f0))) ≈ SpecialFunctions.erfi(0.5f0) rtol =
+        1.0f-4
+    @test @jit(SpecialFunctions.dawson(ConcreteRNumber(0.5f0))) ≈
+        SpecialFunctions.dawson(0.5f0) rtol = 1.0f-4
+    @test @jit(SpecialFunctions.faddeeva(ConcreteRNumber(0.5f0))) ≈
+        SpecialFunctions.faddeeva(0.5f0) rtol = 1.0f-4
+end
