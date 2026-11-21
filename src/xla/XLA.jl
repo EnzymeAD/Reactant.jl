@@ -22,10 +22,17 @@ const CUDA_DATA_DIR = Ref(
     isdefined(Reactant_jll, :ptxas_path) ? dirname(dirname(Reactant_jll.ptxas_path)) : ""
 )
 
+function default_rocm_path()
+    if isdefined(Reactant_jll, :ld_lld_path) && !isempty(Reactant_jll.ld_lld_path)
+        return dirname(dirname(dirname(Reactant_jll.ld_lld_path)))
+    end
+    return get(ENV, "ROCM_PATH", "")
+end
+
 # The ROCm root `enzymexla-gpu-module-to-binary` assembles and links kernels with
-# (`ld.lld` and `amdgcn/bitcode` under it). Refreshed in `__init__` so the
-# precompile-time `ENV["ROCM_PATH"]` does not get baked into the pkgimage; empty
-# leaves it to the pass, which reads `ROCM_PATH`, `ROCM_ROOT` and `ROCM_HOME`.
+# (`llvm/bin/ld.lld` and `amdgcn/bitcode` under it). Defaults to the ROCm
+# toolchain shipped in `Reactant_jll` (mirroring `CUDA_DATA_DIR`), falling back
+# to `ENV["ROCM_PATH"]` in `__init__` so precompile-time paths are not baked in.
 const ROCM_PATH = Ref("")
 
 function LLVMclopts(opts...)
@@ -297,7 +304,7 @@ function has_initialized_client(backend::String)
 end
 
 function __init__()
-    ROCM_PATH[] = Reactant.precompiling() ? "" : get(ENV, "ROCM_PATH", "")
+    ROCM_PATH[] = Reactant.precompiling() ? "" : default_rocm_path()
     if Reactant_jll.is_available()
         @debug "Using libReactantExtra from $(Reactant_jll.libReactantExtra_path)"
 
