@@ -304,6 +304,53 @@ function _rand_foo3(rng, α)
     return boost * dv
 end
 
+const _TEST_TLS_XOSHIRO_KEY_2925 = :Reactant_test_xoshiro_2925
+
+function _unseeded_mt_inplace_2253!(x)
+    rng = MersenneTwister()
+    Random.rand!(rng, x)
+    return x
+end
+
+function _unseeded_mt_host_2253()
+    rng = MersenneTwister()
+    x = zeros(Float64, 2, 3)
+    Random.rand!(rng, x)
+    return x
+end
+
+function _tls_xoshiro_sample_2925()
+    rng = get!(
+        task_local_storage(), _TEST_TLS_XOSHIRO_KEY_2925, Random.Xoshiro()
+    )::Random.Xoshiro
+    return rand(rng, Float32, 4)
+end
+
+function _unseeded_xoshiro_sample_2925()
+    rng = Random.Xoshiro()
+    Random.seed!(rng)
+    return rand(rng, Float64, 3)
+end
+
+@testset "Unseeded Xoshiro and MersenneTwister inside compile (#2925, #2253)" begin
+    delete!(task_local_storage(), _TEST_TLS_XOSHIRO_KEY_2925)
+    y_tls = @jit _tls_xoshiro_sample_2925()
+    @test size(y_tls) == (4,)
+    @test all(0.0f0 .<= Array(y_tls) .<= 1.0f0)
+
+    y_xo = @jit _unseeded_xoshiro_sample_2925()
+    @test size(y_xo) == (3,)
+    @test all(0.0 .<= Array(y_xo) .<= 1.0)
+
+    x_mt = Reactant.to_rarray(zeros(Float64, 2, 3))
+    @jit _unseeded_mt_inplace_2253!(x_mt)
+    @test all(0.0 .<= Array(x_mt) .<= 1.0)
+
+    x_host = @jit _unseeded_mt_host_2253()
+    @test size(x_host) == (2, 3)
+    @test all(0.0 .<= Array(x_host) .<= 1.0)
+end
+
 @testset "Random state mutation across conditional branches and while loop" begin
     for val in (0.5, 1.0, 1.5, 2.0)
         rng = Reactant.ReactantRNG()

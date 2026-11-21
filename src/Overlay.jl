@@ -102,6 +102,26 @@ end
     )
 end
 
+@reactant_overlay function Random.seed!(rng::AbstractRNG)
+    @static if isdefined(Random, :_GLOBAL_RNG)
+        if rng isa Random._GLOBAL_RNG
+            return call_with_reactant(Random.seed!, call_with_reactant(Random.default_rng))
+        end
+    end
+    return call_with_native(Random.seed!, rng)
+end
+
+@reactant_overlay function Random.seed!(rng::AbstractRNG, seed)
+    @static if isdefined(Random, :_GLOBAL_RNG)
+        if rng isa Random._GLOBAL_RNG
+            return call_with_reactant(
+                Random.seed!, call_with_reactant(Random.default_rng), seed
+            )
+        end
+    end
+    return call_with_native(Random.seed!, rng, seed)
+end
+
 ## Only problematic edge case here is the direct `<randfun!>(rng, A::AbstractArray)` call
 ## We can't directly overlay that call without breaking the semantics of inplace update
 for randfun in (:rand, :randn, :randexp)
@@ -161,6 +181,11 @@ for randfun in (:rand, :randn, :randexp)
         @reactant_overlay function Random.$(randfun)(
             rng::AbstractRNG, ::Type{T}=Float64
         ) where {T}
+            @static if isdefined(Random, :SeedHasher)
+                if rng isa Random.SeedHasher
+                    return call_with_native(Random.$(randfun), rng, T)
+                end
+            end
             if unwrapped_eltype(T) <: ReactantPrimitive
                 return TracedRandom.$(overload_randfun)(rng, unwrapped_eltype(T))
             end
