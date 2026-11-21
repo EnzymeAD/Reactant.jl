@@ -316,7 +316,12 @@ end
 
 # LinearAlgebra
 ## Various factorizations
-## TODO(#2258): specialize for `cholesky!` --> cholcopy
+function factorization_copy(::typeof(LinearAlgebra.cholesky), x::AbstractMatrix, pivot)
+    return LinearAlgebra.cholcopy(x)
+end
+function factorization_copy(::typeof(LinearAlgebra.cholesky), x::AbstractArray, pivot)
+    return LinearAlgebra.copy_oftype(x, LinearAlgebra.choltype(x))
+end
 factorization_copy(f::F, x, pivot) where {F} = x
 factorization_copy(f::F, x) where {F} = x
 
@@ -324,7 +329,7 @@ for (jlop, rop, default_pivot) in (
     (:lu, :overloaded_lu, RowMaximum),
     (:lu!, :overloaded_lu, RowMaximum),
     (:cholesky, :overloaded_cholesky, NoPivot),
-    (:cholesky!, :overloaded_cholesky, NoPivot),
+    (:cholesky!, :overloaded_cholesky!, NoPivot),
 )
     @eval begin
         @reactant_overlay function LinearAlgebra.$(jlop)(x::AbstractArray; kwargs...)
