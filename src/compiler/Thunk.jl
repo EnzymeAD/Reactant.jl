@@ -2,9 +2,29 @@
 
 using ..Reactant: XLA
 
+# Before Julia 1.13, `Expr` equality compares literals with `isequal`, so thunks returning
+# `0` and `false` would share a body. Compare literals by `===` instead, as 1.13 does.
+struct ThunkBody
+    body::Expr
+end
+
+Base.hash(x::ThunkBody, h::UInt) = hash(x.body, h)
+Base.:(==)(x::ThunkBody, y::ThunkBody) = exprs_egal(x.body, y.body)
+
+function exprs_egal(@nospecialize(x), @nospecialize(y))
+    if x isa Expr && y isa Expr
+        return x.head === y.head &&
+               length(x.args) == length(y.args) &&
+               all(i -> exprs_egal(x.args[i], y.args[i]), eachindex(x.args))
+    elseif x isa QuoteNode && y isa QuoteNode
+        return exprs_egal(x.value, y.value)
+    end
+    return x === y
+end
+
 # inspired by RuntimeGeneratedFunction.jl
 const __thunk_fwd_body_cache = Dict{Symbol,Expr}()
-const __thunk_rev_body_cache = Dict{Expr,Symbol}()
+const __thunk_rev_body_cache = Dict{ThunkBody,Symbol}()
 
 struct Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM}
     f::FTy
@@ -98,13 +118,10 @@ function register_thunk(
     donated_args_mask,
     compiled_with_sync::Bool,
 )
-    tag = if body in keys(__thunk_rev_body_cache)
-        __thunk_rev_body_cache[body]
-    else
-        fname2 = gensym(Symbol(Symbol(f), :_reactant))
-        __thunk_rev_body_cache[body] = fname2
-        __thunk_fwd_body_cache[fname2] = body
-        fname2
+    tag = get!(__thunk_rev_body_cache, ThunkBody(body)) do
+        fname = gensym(Symbol(Symbol(f), :_reactant))
+        __thunk_fwd_body_cache[fname] = body
+        fname
     end
 
     return Thunk{

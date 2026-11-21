@@ -6,6 +6,7 @@ using LinearAlgebra: LinearAlgebra
 using OneHotArrays: OneHotArrays, OneHotArray, OneHotLike
 using Reactant:
     Reactant, AnyTracedRArray, TracedRArray, TracedRNumber, UnionAnyConcreteRArray
+using Reactant.TracedRArrayOverrides: AbstractReactantArrayStyle
 using ReactantCore: ReactantCore
 using Reactant.Ops: @opcall
 
@@ -44,6 +45,13 @@ function ReactantCore.materialize_traced_array(r::OneHotArray)
 end
 
 Reactant._parent(r::OneHotArray) = r.indices
+
+# The eltype is `Bool`, not `TracedRNumber`, so this isn't caught by `AnyTracedRArray`
+function Base.BroadcastStyle(
+    ::Type{<:OneHotLike{<:Any,<:Any,N,<:AnyTracedRArray}}
+) where {N}
+    return AbstractReactantArrayStyle{N}()
+end
 
 const ConcreteOneHotLike = OneHotLike{<:Any,<:Any,<:Any,<:UnionAnyConcreteRArray}
 
