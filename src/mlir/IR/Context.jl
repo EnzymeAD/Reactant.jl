@@ -8,7 +8,9 @@ end
 Creates an MLIR context.
 """
 function Context(registry=DialectRegistry(); threading::Bool=false)
-    return Context(mark_alloc(API.mlirContextCreateWithRegistry(registry, threading)))
+    ctx = Context(mark_alloc(API.mlirContextCreateWithRegistry(registry, threading)))
+    register_live!(ctx)
+    return ctx
 end
 
 """
@@ -19,7 +21,33 @@ After calling this function, the context must not be used anymore.
 """
 function dispose(ctx::Context)
     # deactivate(ctx)
+    unregister_live!(ctx)
     return mark_dispose(API.mlirContextDestroy, ctx)
+end
+
+# The contexts created here that are not yet disposed, each with a generation
+# that tells it apart from a later one at the same address, so that an object
+# of a disposed context (a location in an error shown after its compilation
+# failed, say) can be shown without reading freed memory.
+const LIVE_CONTEXTS = Dict{Ptr{Cvoid},UInt}()
+const LIVE_CONTEXTS_LOCK = ReentrantLock()
+const CONTEXT_GENERATION = Ref{UInt}(0)
+
+function register_live!(ctx::Context)
+    @lock LIVE_CONTEXTS_LOCK begin
+        LIVE_CONTEXTS[ctx.ref.ptr] = (CONTEXT_GENERATION[] += 1)
+    end
+    return nothing
+end
+
+function unregister_live!(ctx::Context)
+    @lock LIVE_CONTEXTS_LOCK delete!(LIVE_CONTEXTS, ctx.ref.ptr)
+    return nothing
+end
+
+# The generation of the live context at `ref`, or 0 when it is not one made here.
+function live_generation(ref::API.MlirContext)
+    return @lock LIVE_CONTEXTS_LOCK get(LIVE_CONTEXTS, ref.ptr, UInt(0))
 end
 
 Base.cconvert(::Core.Type{API.MlirContext}, c::Context) = c
