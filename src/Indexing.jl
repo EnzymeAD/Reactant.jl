@@ -521,6 +521,15 @@ function get_slice_stride(x)
 end
 
 function getindex_linear(a::TracedRArray{T,N}, indices::AbstractArray) where {T,N}
+    if unwrapped_eltype(indices) <: Bool
+        if indices isa Reactant.TracedType || eltype(indices) <: TracedRNumber
+            error("Boolean indexing with TracedRArrays isn't fully supported yet.")
+        end
+        # Logical indexing: select the positions of the `true` entries, otherwise the
+        # `Bool`s would be taken as the integer indices 0 and 1.
+        @boundscheck checkbounds(a, indices)
+        return getindex_linear(a, findall(vec(indices)))
+    end
     if !(indices isa Reactant.TracedType || eltype(indices) <: TracedRNumber)
         if length(indices) == 1 && first(indices) isa CartesianIndex
             # fast-path else we will end up with a gather
