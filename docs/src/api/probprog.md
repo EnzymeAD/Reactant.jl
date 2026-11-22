@@ -70,6 +70,24 @@ NUTS currently requires an explicit `step_size`; the default
 `Reactant.ConcreteRNumber(0.1)` (or similar) and rely on dual averaging
 when `adapt_step_size = true`.
 
+## Log density
+
+| Symbol | Signature |
+|--------|-----------|
+| `compile_logp`          | `compile_logp(f, args...; observations, selection, rng) -> CompiledLogp` &nbsp;/&nbsp; `compile_logp(f, observations::Constraint, args...)` |
+| `compile_logp_and_grad` | `compile_logp_and_grad(f, args...; observations, selection, rng) -> CompiledLogpAndGrad` &nbsp;/&nbsp; `compile_logp_and_grad(f, observations::Constraint, args...)` |
+| `logp`                  | `logp(f, θ, args...; observations, selection, rng)` &nbsp;/&nbsp; `logp(rng, θ, f, args...; selection, observations_tensor, observation_addresses)` |
+| `logp_and_grad`         | `logp_and_grad(f, θ, args...; observations, selection, rng) -> (logp, grad)` &nbsp;/&nbsp; `logp_and_grad(rng, θ, f, args...; selection, observations_tensor, observation_addresses)` |
+| `CompiledLogp`          | `(c::CompiledLogp)(θ) -> logp` |
+| `CompiledLogpAndGrad`   | `(c::CompiledLogpAndGrad)(θ) -> (logp, grad)` &nbsp;/&nbsp; `(c::CompiledLogpAndGrad)(F, G, θ)` |
+
+```@docs
+Reactant.ProbProg.compile_logp
+Reactant.ProbProg.compile_logp_and_grad
+Reactant.ProbProg.logp
+Reactant.ProbProg.logp_and_grad
+```
+
 ## State persistence
 
 | Symbol | Signature | See |
