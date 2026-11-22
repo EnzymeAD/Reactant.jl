@@ -127,6 +127,43 @@ struct ConstMatMul{X}
 end
 (m::ConstMatMul)(W) = sum(W * m.X)
 
+# The same, with the traced operand reshaped (or viewed, permuted, transposed) first: the
+# wrapper is not a `TracedRArray`, so `*` used to fall back to the element-wise fill.
+@testset "Multiplication of a wrapped traced operand with an untraced one (#3195)" begin
+    X = Reactant.TestUtils.construct_test_array(Float64, 4, 25)
+    v = Reactant.TestUtils.construct_test_array(Float64, 4)
+    x = Reactant.TestUtils.construct_test_array(Float64, 36)
+    x_ra = Reactant.to_rarray(x)
+    W = Reactant.TestUtils.construct_test_array(Float64, 9, 4)
+    W_ra = Reactant.to_rarray(W)
+
+    cases = (
+        ("reshaped", x -> reshape(x, 9, 4) * X, x_ra, reshape(x, 9, 4) * X),
+        ("reshaped, vector", x -> reshape(x, 9, 4) * v, x_ra, reshape(x, 9, 4) * v),
+        (
+            "reshaped, transposed",
+            x -> transpose(reshape(x, 4, 9)) * X,
+            x_ra,
+            transpose(reshape(x, 4, 9)) * X,
+        ),
+        ("reshaped, adjoint", x -> reshape(x, 4, 9)' * X, x_ra, reshape(x, 4, 9)' * X),
+        ("viewed", w -> view(w, 2:8, :) * X, W_ra, view(W, 2:8, :) * X),
+        (
+            "permuted",
+            w -> PermutedDimsArray(w, (2, 1)) * W,
+            W_ra,
+            PermutedDimsArray(W, (2, 1)) * W,
+        ),
+    )
+    @testset "$(name)" for (name, f, arg, expected) in cases
+        @test Array(@jit(f(arg))) ≈ expected
+        # one `dot_general`, not one op per output element
+        hlo = repr(@code_hlo(optimize = false, f(arg)))
+        @test count("stablehlo.dot_general", hlo) == 1
+        @test count("stablehlo.concatenate", hlo) == 0
+    end
+end
+
 @testset "Multiplication with an untraced operand (#3167)" begin
     A, B, C = 9, 40, 50
     X = Reactant.TestUtils.construct_test_array(Float32, B, C)
