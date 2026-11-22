@@ -284,6 +284,7 @@ const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 include("ControlFlow.jl")
 include("Enums.jl")
 include("Tracing.jl")
+include("SparseTensors.jl")
 
 include("integration/MPI.jl")
 
@@ -322,7 +323,8 @@ export ConcreteRArray,
     @trace,
     within_compile,
     @annotate,
-    annotate
+    annotate,
+    CSRMatrix
 
 @static if VERSION ≥ v"1.11"
     @eval $(Expr(:public, :Periodic, :Binomial, :TracedEnum, :ConcreteEnum))

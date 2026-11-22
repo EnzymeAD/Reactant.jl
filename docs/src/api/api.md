@@ -41,6 +41,13 @@ Reactant.TracedEnum
 Reactant.ConcreteEnum
 ```
 
+## Sparse arrays
+
+```@docs
+Reactant.CSRMatrix
+Reactant.sparse_csr_spmm
+```
+
 ## Inspect Generated HLO
 
 ```@docs
