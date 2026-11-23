@@ -18,7 +18,11 @@ import ..Reactant:
     append_path,
     TracedType,
     MPI_REQUEST_WIDTH
-import Reactant: OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
+import Reactant:
+    ADOptimizationOptions,
+    OptimizeCommunicationOptions,
+    ShardyPropagationOptions,
+    CompileOptions
 using Reactant_jll: Reactant_jll
 
 include("Macros.jl")
@@ -260,7 +264,8 @@ Base.@nospecializeinfer function compile_mlir!(
     debugcache=default_debugcache(),
     callcache=default_callcache(),
     sdycache=default_sdycache(),
-    sdygroupidcache=default_sdygroupidcache();
+    sdygroupidcache=default_sdygroupidcache(),
+    autodiffcache=default_autodiffcache();
     fn_kwargs=(),
     runtime::Union{Val{:PJRT},Val{:IFRT}},
     legalize_stablehlo_to_mhlo::Bool=false,
@@ -282,6 +287,7 @@ Base.@nospecializeinfer function compile_mlir!(
     MLIR.IR.activate(mod)
     MLIR.IR.activate(MLIR.IR.body(mod))
     activate_callcache!(callcache)
+    activate_autodiffcache!(autodiffcache)
     activate_debugcache!(debugcache)
     activate_sdycache!(sdycache)
     activate_sdygroupidcache!(sdygroupidcache)
@@ -317,6 +323,7 @@ Base.@nospecializeinfer function compile_mlir!(
         deactivate_raising!(is_raising)
         deactivate_sdycache!(sdycache)
         deactivate_sdygroupidcache!(sdygroupidcache)
+        deactivate_autodiffcache!(autodiffcache)
         deactivate_callcache!(callcache)
         deactivate_debugcache!(debugcache)
         MLIR.IR.deactivate(MLIR.IR.body(mod))
@@ -405,6 +412,7 @@ Base.@nospecializeinfer function compile_mlir!(
     opt_passes2 = optimization_passes(
         compile_options; sroa=false, recognize_comms, lower_comms, is_sharded
     )
+    ad_pre_enzyme_pipeline = ad_pre_enzyme_passes(compile_options.ad_optimization_passes)
 
     raise_passes = if raise isa String
         # Raising passes were specified
@@ -523,6 +531,7 @@ Base.@nospecializeinfer function compile_mlir!(
                     end,
                     is_kernelad ? String[kernelad_pre_enzyme_passes] : String[],
                     String[
+                        ad_pre_enzyme_pipeline...,
                         enzyme_pass,
                         opt_passes2,
                         "canonicalize",
@@ -557,6 +566,7 @@ Base.@nospecializeinfer function compile_mlir!(
                         opt_passes,
                         "enzyme-batch",
                         opt_passes2,
+                        ad_pre_enzyme_pipeline...,
                         enzyme_pass,
                         opt_passes2,
                         "canonicalize",
@@ -582,6 +592,7 @@ Base.@nospecializeinfer function compile_mlir!(
                         raise_passes,
                         "enzyme-batch",
                         opt_passes2,
+                        ad_pre_enzyme_pipeline...,
                         enzyme_pass,
                         opt_passes2,
                         "canonicalize",
@@ -596,6 +607,7 @@ Base.@nospecializeinfer function compile_mlir!(
                         opt_passes,
                         "enzyme-batch",
                         opt_passes2,
+                        ad_pre_enzyme_pipeline...,
                         enzyme_pass,
                         opt_passes2,
                         "canonicalize",
@@ -623,6 +635,7 @@ Base.@nospecializeinfer function compile_mlir!(
                         opt_passes,
                         "enzyme-batch",
                         opt_passes2,
+                        ad_pre_enzyme_pipeline...,
                         enzyme_pass,
                         opt_passes2,
                         "canonicalize",
@@ -646,6 +659,7 @@ Base.@nospecializeinfer function compile_mlir!(
                     opt_passes,
                     "enzyme-batch",
                     opt_passes2,
+                    ad_pre_enzyme_pipeline...,
                     enzyme_pass,
                     opt_passes2,
                     "canonicalize",
@@ -673,6 +687,7 @@ Base.@nospecializeinfer function compile_mlir!(
                         impulse_pass(),
                         "lower-impulse-to-stablehlo{backend=$backend}",
                         "outline-enzyme-regions",
+                        ad_pre_enzyme_pipeline...,
                         enzyme_pass,
                         opt_passes2,
                         "canonicalize",
@@ -699,6 +714,7 @@ Base.@nospecializeinfer function compile_mlir!(
                         impulse_pass(),
                         "lower-impulse-to-stablehlo{backend=$backend}",
                         "outline-enzyme-regions",
+                        ad_pre_enzyme_pipeline...,
                         enzyme_pass,
                         opt_passes2,
                         "canonicalize",
@@ -730,6 +746,7 @@ Base.@nospecializeinfer function compile_mlir!(
                 [
                     "mark-func-memory-effects",
                     "enzyme-batch",
+                    ad_pre_enzyme_pipeline...,
                     enzyme_pass,
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
@@ -746,6 +763,7 @@ Base.@nospecializeinfer function compile_mlir!(
                 [
                     "mark-func-memory-effects",
                     "enzyme-batch",
+                    ad_pre_enzyme_pipeline...,
                     enzyme_pass,
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
@@ -769,6 +787,7 @@ Base.@nospecializeinfer function compile_mlir!(
                         raise_passes,
                         "enzyme-batch",
                         opt_passes2,
+                        ad_pre_enzyme_pipeline...,
                         enzyme_pass,
                         "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
                         lower_enzymexla_passes,
@@ -780,6 +799,7 @@ Base.@nospecializeinfer function compile_mlir!(
                         opt_passes,
                         "enzyme-batch",
                         opt_passes2,
+                        ad_pre_enzyme_pipeline...,
                         enzyme_pass,
                         "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
                         kern,
@@ -1586,7 +1606,7 @@ function compile(ctx, f, args; kwargs...)
     )
 end
 
-for cache_type in (:callcache, :sdycache, :sdygroupidcache, :debugcache)
+for cache_type in (:callcache, :autodiffcache, :sdycache, :sdygroupidcache, :debugcache)
     activate_fn = Symbol(:activate_, cache_type, :!)
     deactivate_fn = Symbol(:deactivate_, cache_type, :!)
     has_fn = Symbol(:_has_, cache_type)
@@ -1656,6 +1676,10 @@ function default_callcache()
             resargprefix::Symbol,
         }
     }()
+end
+
+function default_autodiffcache()
+    return Dict{Vector,Any}()
 end
 
 function default_debugcache()
