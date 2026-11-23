@@ -475,12 +475,7 @@ Base.@nospecializeinfer function compile_mlir!(
     # erasing the functions it leaves uncalled), and each one is then inlined into a
     # jit_region so that no jit_call reaches Enzyme. This mirrors the default raising
     # sequence, stopping short of raise-affine-to-stablehlo so that the IR stays in
-    # affine/memref form. mark-func-memory-effects runs again first: its run at the start of
-    # the pipeline precedes sroa-wrappers, so every buffer a kernel wrapper stores into its
-    # argument struct escapes and none is marked llvm.readonly. Once the structs are gone it
-    # marks the buffers kernels only read, and canonicalize drops their kernel_call results,
-    # which would otherwise carry activity from the call's other operands, making Enzyme
-    # accumulate (atomically, on GPU) the adjoint of every buffer a kernel reads.
+    # affine/memref form.
     kernelad_gpu = backend == "cuda" || backend == "rocm"
     kernelad_pre_enzyme_passes = "mark-func-memory-effects,canonicalize,lower-kernel-to-polygeist{gpu-wrapper=$(kernelad_gpu)},fuse-jit,symbol-dce,jit-call-to-jit-region,llvm-to-memref-access,canonicalize,convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,canonicalize,func.func(canonicalize-loops{speculate_partial_if=$(compile_options.speculate_partial_ifs)}),canonicalize-scf-for,canonicalize,libdevice-funcs-raise{remove_freeze=true},canonicalize,affine-cfg,canonicalize,func.func(canonicalize-loops{speculate_partial_if=$(compile_options.speculate_partial_ifs)}),canonicalize,llvm-to-affine-access,canonicalize,delinearize-indexing,canonicalize,simplify-affine-exprs,affine-cfg,canonicalize,func.func(affine-loop-invariant-code-motion),canonicalize,sort-memory,func.func(kernelcast),canonicalize,inline{default-pipeline=canonicalize inlining-threshold=4294967295 max-iterations=4},canonicalize,cse"
     # Lower the affine atomics the reverse kernels accumulate with to enzyme atomics and
