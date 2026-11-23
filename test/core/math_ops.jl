@@ -490,6 +490,21 @@ end
     @test div(7, ConcreteRNumber(3)) == div(7, 3)
 end
 
+# https://github.com/EnzymeAD/Reactant.jl/issues/3823
+@testset "integer div with rounding modes" begin
+    x = vcat(collect(-9:9), typemin(Int), typemax(Int))
+    x_ra = Reactant.to_rarray(x)
+    @testset "$f, d=$d" for f in (
+            fld, cld, div, (a, b) -> div(a, b, RoundFromZero), mod, rem
+        ),
+        d in (-8, -3, 3, 8)
+
+        @test @jit(f.(x_ra, d)) == f.(x, d)
+        @test @jit(f.(x_ra, Reactant.to_rarray(fill(d, length(x))))) ==
+            f.(x, fill(d, length(x)))
+    end
+end
+
 @testset "log10" begin
     x = collect(Float64, 1:10)
     x_ra = Reactant.to_rarray(x)
