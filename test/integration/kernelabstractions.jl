@@ -121,11 +121,23 @@ end
     c = Reactant.to_rarray(Float64[0.5, 0.5, 0.5, 0.5])
     out = Reactant.to_rarray(zeros(Float64, 4))
 
+    platform_name = lowercase(Reactant.XLA.platform_name(Reactant.XLA.default_backend()))
     ir = repr(Reactant.@code_hlo raise = true run_fma!(out, a, b, c))
-    @test @filecheck begin
-        @check "%0 = stablehlo.fma %arg1, %arg2, %arg3 : tensor<4xf64>"
-        @check_next "return %0 : tensor<4xf64>"
-        ir
+    if platform_name == "tpu" && occursin("stablehlo.multiply", ir)
+        # lower-enzymexla-math decomposes unsupported stablehlo.fma on TPU into
+        # multiply + add.
+        @test @filecheck begin
+            @check "%0 = stablehlo.multiply %arg1, %arg2 : tensor<4xf64>"
+            @check_next "%1 = stablehlo.add %0, %arg3 : tensor<4xf64>"
+            @check_next "return %1 : tensor<4xf64>"
+            ir
+        end
+    else
+        @test @filecheck begin
+            @check "%0 = stablehlo.fma %arg1, %arg2, %arg3 : tensor<4xf64>"
+            @check_next "return %0 : tensor<4xf64>"
+            ir
+        end
     end
 end
 
