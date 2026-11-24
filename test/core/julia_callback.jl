@@ -125,4 +125,35 @@ if (RunningOnCPU || RunningOnCUDA) && cfunction_closure
         result = @jit traced_pure(x)
         @test Array(result) ≈ Float32[9.0, 16.0]
     end
+
+    if RunningOnCPU && VERSION >= v"1.12"
+        @testset "GC inside callback during host transfer" begin
+            function copy_after_gc!(output, input)
+                Libc.systemsleep(0.5)
+                GC.gc()
+                copyto!(output, input)
+                return nothing
+            end
+
+            function callback_copy(x)
+                y = x * x
+                return Reactant.Ops.julia_callback(
+                    copy_after_gc!, ((eltype(y), size(y)),), y
+                )
+            end
+
+            x = Reactant.to_rarray(ones(Float32, 512, 512))
+            compiled = Reactant.@compile callback_copy(x)
+
+            y = compiled(x)
+            host = Array(y)
+            @test size(host) == (512, 512)
+            @test all(==(512.0f0), host)
+
+            y2 = compiled(x)
+            dest = Matrix{Float32}(undef, 512, 512)
+            copyto!(dest, y2)
+            @test all(==(512.0f0), dest)
+        end
+    end
 end
