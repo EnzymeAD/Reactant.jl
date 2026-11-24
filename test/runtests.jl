@@ -1,4 +1,5 @@
 using Reactant, ParallelTestRunner, CondaPkg, Test, Setfield
+using Pkg: Pkg
 
 const BACKEND = lowercase(get(ENV, "REACTANT_BACKEND_GROUP", "auto"))
 
@@ -91,8 +92,7 @@ if BACKEND == "julia-cpu"
     filter!(((k, _),) -> !startswith(k, "integration/triton"), testsuite)
 elseif BACKEND == "metal"
     # dependency conflict: Metal.jl v1.0 requires GPUCompiler v2
-    using Pkg: Pkg
-    pkg"add Metal@1.0"
+    Pkg.add("Metal@1.0")
 
     using Metal
     Metal.functional() || error("Metal is not functional!")
