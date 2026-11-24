@@ -1802,6 +1802,25 @@ end
     @test_throws UndefVarError @compile f_undef_var_error(x)
 end
 
+observe_captured(_, x) = nothing
+
+function while_captured_value(x, p)
+    i = 0
+    @trace while i < 3
+        observe_captured(p, x)   # `p` is captured from outside the loop and only read
+        x = x .+ 1
+        i += 1
+    end
+    return x
+end
+
+@testset "captured `nothing` in while loop (#3835)" begin
+    for p in (nothing, missing)
+        x = Reactant.to_rarray(zeros(Float32, 2))
+        @test Array(@jit while_captured_value(x, p)) ≈ fill(3.0f0, 2)
+    end
+end
+
 function triply_nested_trace_for(D::AbstractMatrix{T}) where {T}
     n, m = size(D)
     corr = zeros(T, m, m)

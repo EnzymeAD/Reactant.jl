@@ -82,6 +82,10 @@ MissingTracedValue() = MissingTracedValue(())
 
 Base.zero(::MissingTracedValue) = MissingTracedValue()
 
+# Sentinel stored in a `@trace while` loop slot for a variable that is not defined before
+# the loop. A dedicated type is needed since `nothing` is a valid value for a variable.
+struct UndefValue end
+
 const SPECIAL_SYMBOLS = [
     :(:), :nothing, :missing, :Inf, :Inf16, :Inf32, :Inf64, :Base, :Core
 ]
@@ -535,14 +539,14 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
     args_names = Expr(:tuple, external_syms...)
 
     function loop_init_val(s)
-        s ∈ body_symbols.assignments || return :(@isdefined($s) ? $s : nothing)
+        s ∈ body_symbols.assignments || return :(@isdefined($s) ? $s : $(UndefValue)())
         return :(
             if $(Expr(:islocal, s)) && @isdefined($s)
                 $s
             elseif @isdefined($s) && !$is_global_value($mod, $(QuoteNode(s)), $s)
                 $s
             else
-                nothing
+                $(UndefValue)()
             end
         )
     end
@@ -553,19 +557,22 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
 
     local_names = Expr(:block, external_syms...)
     to_locals = Expr(
-        :block, [:(
-            if !isnothing($ref[])
+        :block,
+        [:(
+            if !($ref[] isa $(UndefValue))
                 $s = $ref[]
             end
-        ) for (s, ref) in zip(external_syms, ref_syms)]...
+        ) for (s, ref) in zip(external_syms, ref_syms)]...,
     )
-    from_locals = [(
-        quote
-            if !isnothing($ref[])
-                $ref[] = $s
+    from_locals = [
+        (
+            quote
+                if !($ref[] isa $(UndefValue))
+                    $ref[] = $s
+                end
             end
-        end
-    ) for (s, ref) in zip(external_syms, ref_syms)]
+        ) for (s, ref) in zip(external_syms, ref_syms)
+    ]
 
     body_fn_sym = gensym(:body_fn)
     cond_fn_sym = gensym(:cond_fn)
@@ -574,7 +581,7 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
     assigned_syms = body_symbols.assignments
     rebind_outputs = [
         quote
-            if !isnothing($(args_sym)[$i][])
+            if !($(args_sym)[$i][] isa $(UndefValue))
                 $s = $(args_sym)[$i][]
             end
         end for (i, s) in enumerate(external_syms) if s ∈ assigned_syms
