@@ -646,6 +646,10 @@ function Reactant.ka_with_reactant(ndrange, workgroupsize, obj, args...)
     ndrange, workgroupsize, iterspace, dynamic = KA.launch_config(
         obj, ndrange, workgroupsize
     )
+
+    # skip empty launch
+    length(KA.blocks(iterspace)) == 0 && return nothing
+
     # this might not be the final context, since we may tune the workgroupsize
     ctx = KA.mkcontext(obj, ndrange, iterspace)
 

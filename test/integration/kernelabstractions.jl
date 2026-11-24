@@ -319,3 +319,27 @@ end
         @test Array(out) == clamp.(x, 2, 5)
     end
 end
+
+# An empty ndrange launches no work items. With a dynamic workgroup size the ndrange is also
+# used as the preliminary workgroup size. This test makes sure we can handle this case without
+# any divide by zero errors.
+function launch_scale!(y, x)
+    scale!(KernelAbstractions.get_backend(y))(y, x, 2.0; ndrange=size(y))
+    return nothing
+end
+
+@testset "KernelAbstractions empty ndrange" begin
+    @testset "raise = $raise" for raise in (false, true)
+        x = Reactant.to_rarray(zeros(0))
+        y = Reactant.to_rarray(zeros(0))
+        @jit raise = raise launch_elementwise!(double_kernel!, y, x)
+        @test size(Array(y)) == (0,)
+
+        @testset "size $sz" for sz in ((0, 3), (3, 0))
+            x = Reactant.to_rarray(zeros(sz))
+            y = Reactant.to_rarray(zeros(sz))
+            @jit raise = raise launch_scale!(y, x)
+            @test size(Array(y)) == sz
+        end
+    end
+end
