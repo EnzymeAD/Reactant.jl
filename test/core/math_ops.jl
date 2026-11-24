@@ -494,9 +494,8 @@ end
 @testset "integer div with rounding modes" begin
     x = vcat(collect(-9:9), typemin(Int), typemax(Int))
     x_ra = Reactant.to_rarray(x)
-    @testset "$f, d=$d" for f in (
-            fld, cld, div, (a, b) -> div(a, b, RoundFromZero), mod, rem
-        ),
+    @testset "$f, d=$d" for f in
+                            (fld, cld, div, (a, b) -> div(a, b, RoundFromZero), mod, rem),
         d in (-8, -3, 3, 8)
 
         @test @jit(f.(x_ra, d)) == f.(x, d)
