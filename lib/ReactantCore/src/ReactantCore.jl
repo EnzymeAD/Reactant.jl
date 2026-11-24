@@ -557,19 +557,22 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
 
     local_names = Expr(:block, external_syms...)
     to_locals = Expr(
-        :block, [:(
+        :block,
+        [:(
             if !($ref[] isa $(UndefValue))
                 $s = $ref[]
             end
-        ) for (s, ref) in zip(external_syms, ref_syms)]...
+        ) for (s, ref) in zip(external_syms, ref_syms)]...,
     )
-    from_locals = [(
-        quote
-            if !($ref[] isa $(UndefValue))
-                $ref[] = $s
+    from_locals = [
+        (
+            quote
+                if !($ref[] isa $(UndefValue))
+                    $ref[] = $s
+                end
             end
-        end
-    ) for (s, ref) in zip(external_syms, ref_syms)]
+        ) for (s, ref) in zip(external_syms, ref_syms)
+    ]
 
     body_fn_sym = gensym(:body_fn)
     cond_fn_sym = gensym(:cond_fn)
