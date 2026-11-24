@@ -213,13 +213,7 @@ end
         "XLA_REACTANT_GPU_MEM_FRACTION" => 1 / (total_jobs + 0.1),
         "XLA_REACTANT_GPU_PREALLOCATE" => false,
     ) do
-        runtests(
-            Reactant,
-            parsed_args;
-            testsuite,
-            test_worker,
-            init_code,
-        )
+        runtests(Reactant, parsed_args; testsuite, test_worker, init_code)
     end
 
     if (
