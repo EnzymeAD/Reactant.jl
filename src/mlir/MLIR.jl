@@ -3,14 +3,46 @@ module MLIR
 using ..Reactant
 
 module API
-    using CEnum: @cenum
     using Preferences: Preferences
     using Reactant_jll: Reactant_jll
     using Libdl: Libdl
 
+    # Blocking PJRT/IFRT wait, host-transfer, and execute calls that must allow GC safepoints.
+    const _GC_SAFE_FUNCTIONS = Set{Symbol}([
+        :BufferToHost,
+        :CopyFromBuffer,
+        :CopyToBuffer,
+        :FutureAwait,
+        :XLAExecute,
+        :XLAExecuteSharded,
+        :ifrt_array_copy_to_host_buffer,
+        :ifrt_future_await,
+        :ifrt_loaded_executable_execute,
+    ])
+
+    function _add_gc_safe_to_ccall(ex)
+        ex isa Expr || return ex
+        if Meta.isexpr(ex, :macrocall) &&
+            ex.args[1] === Symbol("@ccall") &&
+            length(ex.args) == 3
+            return Expr(:macrocall, ex.args[1], ex.args[2], :(gc_safe = true), ex.args[3])
+        end
+        return Expr(ex.head, map(_add_gc_safe_to_ccall, ex.args)...)
+    end
+
+    function _rewrite_gc_safe_ccall(ex)
+        VERSION >= v"1.12" || return ex
+        if Meta.isexpr(ex, :function) &&
+            Meta.isexpr(ex.args[1], :call) &&
+            ex.args[1].args[1] in _GC_SAFE_FUNCTIONS
+            return _add_gc_safe_to_ccall(ex)
+        end
+        return ex
+    end
+
     # MLIR C API
     let
-        include("libMLIR_h.jl")
+        include(_rewrite_gc_safe_ccall, "libMLIR_h.jl")
     end
 
     # Additional functions

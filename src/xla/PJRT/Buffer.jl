@@ -155,7 +155,7 @@ end
 function XLA.to_host(buffer::Buffer, data, sharding)
     @assert data !== C_NULL
     @assert buffer.buffer !== C_NULL
-    GC.@preserve buffer begin
+    GC.@preserve buffer data begin
         MLIR.API.BufferToHost(buffer.buffer, data)
     end
     return data

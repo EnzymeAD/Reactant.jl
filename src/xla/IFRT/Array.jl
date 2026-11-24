@@ -194,7 +194,7 @@ function XLA.to_host(buffer::Array, data, reactant_sharding)
         data_buffer_shape = reverse(size(data_buffer))
         @assert size(data) == data_buffer_shape "Expected data to be of size \
                                                  $(size(data)), got $(data_buffer_shape)"
-        GC.@preserve data_buffer begin
+        GC.@preserve data_buffer data begin
             MLIR.API.ifrt_array_copy_to_host_buffer(data_buffer.buffer, data)
         end
         return data
@@ -345,7 +345,9 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
             num_partitions=length(mesh.device_ids),
         )
 
-        only(XLA.execute(exec, (array.buffer,), (UInt8(0),), Val(1)))
+        GC.@preserve array begin
+            only(XLA.execute(exec, (array.buffer,), (UInt8(0),), Val(1)))
+        end
     finally
         Reactant.Compiler.release_guard_from_gc_for_module(mod)
         Reactant.Compiler.deactivate_sdycache!(sdycache)
