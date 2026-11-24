@@ -1496,9 +1496,9 @@ function handle(
     return MPSGraphs.reshapeTensor(graph, c, convert(MPSShape, result.size))
 end
 
-# for some trivial reduction bodies (i.e. `add`, `multiply`, `maximum` and `minimum`), MPSGraph already provides kernels
-# but for more complex reductions, we manually unroll the reduction loop into a tree and parallelize each level of the
-# reduction tree with `enzyme-batch`
+# for some trivial reduction bodies (i.e. `add`, `multiply`, `maximum`, `minimum`, and `and` and `or` of booleans),
+# MPSGraph already provides kernels, but for more complex reductions, we manually unroll the reduction loop into a tree
+# and parallelize each level of the reduction tree with `enzyme-batch`
 function handle(
     ::Val{Symbol("stablehlo.reduce")},
     graph::MPSGraph,
@@ -1531,6 +1531,25 @@ function handle(
         MPSGraphs.reductionMinimumPropagateNaNWithTensor(
             graph, only(inputs), NSArray(NSNumber.(dims))
         )
+    elseif opname in ("stablehlo.and", "stablehlo.or") &&
+        MPS.jl_mps_to_typ[only(inputs).dataType] == Bool
+        # MPSGraph reduces integers logically, but StableHLO bitwise, so they are reduced by the tree
+        x = only(inputs)
+        y = if opname == "stablehlo.and"
+            @objc [
+                graph::id{MPSGraph} reductionAndWithTensor:(x::id{MPSGraphTensor})
+                axes:(NSArray(NSNumber.(dims))::id{NSArray})
+                name:(nil::id{NSString})
+            ]::MPSGraphTensor
+        else
+            @objc [
+                graph::id{MPSGraph} reductionOrWithTensor:(x::id{MPSGraphTensor})
+                axes:(NSArray(NSNumber.(dims))::id{NSArray})
+                name:(nil::id{NSString})
+            ]::MPSGraphTensor
+        end
+        # the `and` of booleans is an `Int32`
+        MPSGraphs.castTensor(graph, y, Bool)
     else
         nothing
     end
@@ -1542,29 +1561,26 @@ function handle(
         return handle(Val(Symbol(opname)), graph, (only(inits), reduced), (;), results)
     end
 
-    slice =
-        (x, starts, limits) -> handle(
-            Val(Symbol("stablehlo.slice")),
-            graph,
-            (x,),
-            (; start_indices=starts, limit_indices=limits, strides=[1, 1]),
-            (),
-        )
-
     shape = collect(size(first(inputs)))
     kept = setdiff(0:(length(shape) - 1), dims)
     rows, cols = prod(shape[dims .+ 1]; init=1), prod(shape[kept .+ 1]; init=1)
-    # the number of rows at each level
+
+    # each level combines the groups of `K` adjacent rows into one row each. A level whose number of rows isn't a
+    # multiple of `K` is first prepended with rows of `init`, which StableHLO allows anywhere in the reduction.
+    # MPSGraph's compile time doubles with each level, so `K = 4` halves it per level and exponentially supresses
+    K = 4
+
+    # the number of rows after each level
     levels = Int[]
     m = rows
     while m > 1
+        m = cld(m, K)
         push!(levels, m)
-        m = m ÷ 2 + isodd(m)
     end
 
     # `enzyme.batch` calls a function, so the body is copied to `@body` in a module of its own, where `@level_h` applies
-    # it to `h` pairs of rows (the last level and the combination with `init` have `h = 1`) through `enzyme.batch`,
-    # which `enzyme-batch` turns into ops on whole tensors
+    # it to 2 tensors of `h` rows (the combination with `init` has `h = 1`) through `enzyme.batch`, which
+    # `enzyme-batch` turns into ops on whole tensors
     reduce_op = IR.parent_op(body)
     ctx, loc = IR.context(reduce_op), IR.location(reduce_op)
     mod = IR.Module(loc)
@@ -1617,7 +1633,7 @@ function handle(
             IR.@with_block block Dialects.func.return_(IR.operands(ret); location=loc)
             IR.dispose(ret)
 
-            for h in unique([levels .÷ 2; 1])
+            for h in unique([levels; 1])
                 types = [IR.TensorType([h, cols], eltype(t)) for t in scalars]
                 entry = IR.Block([types; types], fill(loc, 2n))
                 IR.@with_block entry begin
@@ -1664,29 +1680,44 @@ function handle(
             x = permute(graph, x, [sort(dims); kept])
             return MPSGraphs.reshapeTensor(graph, x, convert(MPSShape, [rows, cols]))
         end
-        for m in levels
-            half, f = m ÷ 2, level(m ÷ 2)
-            for (i, x) in enumerate(xs)
-                x = isodd(m) ? slice(x, [0, 0], [2half, cols]) : x
-                x = MPSGraphs.reshapeTensor(graph, x, convert(MPSShape, [half, 2cols]))
-                vars[IR.argument(f, i).ref.ptr] = slice(x, [0, 0], [half, cols])
-                vars[IR.argument(f, n + i).ref.ptr] = slice(x, [0, cols], [half, 2cols])
-            end
-            ys = codegen!(graph, f, vars)
-            if isodd(m)
-                ys = map(ys, xs) do y, x
-                    last_ = slice(x, [m - 1, 0], [m, cols])
+        m = rows
+        for h in levels
+            f = level(h)
+            # the rows of each input as `K` tensors of `h` rows, where the `k`-th one has the `k`-th row of each group
+            parts = map(xs, inits) do x, init
+                pad = h * K - m
+                if pad > 0
+                    init = MPSGraphs.broadcastTensor(
+                        graph, init, convert(MPSShape, [pad, cols])
+                    )
                     attrs = (; dimension=0)
-                    return handle(
+                    x = handle(
                         Val(Symbol("stablehlo.concatenate")),
                         graph,
-                        (y, last_),
+                        (init, x),
                         attrs,
                         (),
                     )
                 end
+                x = MPSGraphs.reshapeTensor(graph, x, convert(MPSShape, [h, K * cols]))
+                split_ = @objc [
+                    graph::id{MPSGraph} splitTensor:(x::id{MPSGraphTensor})
+                    numSplits:(K::NSUInteger)
+                    axis:(1::NSInteger)
+                    name:(nil::id{NSString})
+                ]::id{NSArray}
+                return convert(Vector{MPSGraphTensor}, NSArray(split_))
             end
-            xs = ys
+            # the rows of each group are combined from left to right
+            xs = getindex.(parts, 1)
+            for k in 2:K
+                for i in 1:n
+                    vars[IR.argument(f, i).ref.ptr] = xs[i]
+                    vars[IR.argument(f, n + i).ref.ptr] = parts[i][k]
+                end
+                xs = codegen!(graph, f, vars)
+            end
+            m = h
         end
 
         f = level(1)
