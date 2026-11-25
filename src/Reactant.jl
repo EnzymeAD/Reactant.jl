@@ -52,6 +52,7 @@ include("ProtoUtils.jl")
 
 # auxiliary types and functions
 include("OrderedIdDict.jl")
+include("WeakKeyIdDict.jl")
 
 function precompiling()
     return (@ccall jl_generating_output()::Cint) == 1
@@ -60,6 +61,8 @@ end
 struct ReactantABI <: EnzymeCore.ABI end
 
 include("PrimitiveTypes.jl")
+include("mlir/MLIR.jl")
+include("xla/XLA.jl")
 
 function ancestor(x::AbstractArray)
     p_x = applicable(_parent, x) ? _parent(x) : parent(x)
@@ -99,9 +102,6 @@ include("CompileOptions.jl")
 
 export OptimizeCommunicationOptions,
     ShardyPropagationOptions, CompileOptions, MultiFloatOptions
-
-include("mlir/MLIR.jl")
-include("xla/XLA.jl")
 
 include("Configuration.jl")
 include("Sharding.jl")

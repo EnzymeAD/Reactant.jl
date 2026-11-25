@@ -1,6 +1,6 @@
 using Reactant, Test, FileCheck
 
-const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+const RunningOnTPU = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "tpu"
 
 @testset "concatenation" begin
     @testset "Number" begin

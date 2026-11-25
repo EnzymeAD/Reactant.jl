@@ -2,7 +2,7 @@
 using Reactant, Test, Enzyme, FileCheck
 using ArrayInterface
 
-const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+const RunningOnTPU = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "tpu"
 
 @testset "Scalars" begin
     @testset "Only Scalars" begin

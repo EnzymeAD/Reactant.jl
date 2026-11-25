@@ -104,6 +104,7 @@ export default defineConfig({
           { text: "Raising", link: "/tutorials/raising" },
           { text: "Computational kernels", link: "/tutorials/kernels" },
           { text: "Debugging compilation errors", link: "/tutorials/debugging" },
+          { text: "Julia as backend", link: "/tutorials/julia-cpu" },
           { text: "Probabilistic Programming", link: "/tutorials/probprog/" },
         ],
       },
@@ -151,6 +152,7 @@ export default defineConfig({
             items: [
               { text: "MLIR API", link: "/api/mlirc" },
               { text: "XLA", link: "/api/xla" },
+              { text: "PJRT Plugin", link: "/api/pjrt-plugin" },
             ],
           },
           { text: "Internal API", link: "/api/internal" },
@@ -198,6 +200,7 @@ export default defineConfig({
           { text: "Raising", link: "/tutorials/raising" },
           { text: "Computational kernels", link: "/tutorials/kernels" },
           { text: "Debugging compilation errors", link: "/tutorials/debugging" },
+          { text: "Julia as backend", link: "/tutorials/julia-cpu" },
           {
             text: "Probabilistic Programming",
             collapsed: false,
@@ -270,6 +273,7 @@ export default defineConfig({
             items: [
               { text: "MLIR API", link: "/api/mlirc" },
               { text: "XLA", link: "/api/xla" },
+              { text: "PJRT Plugin", link: "/api/pjrt-plugin" },
             ],
           },
           { text: "Internal API", link: "/api/internal" },

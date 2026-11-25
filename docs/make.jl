@@ -9,6 +9,8 @@ makedocs(;
         ReactantCore,
         EnzymeCore,
         Reactant.XLA,
+        Reactant.XLA.PJRT.Plugin,
+        Reactant.Accelerators.JuliaCPU,
         Reactant.MLIR,
         Reactant.MLIR.API,
         Reactant.MLIR.IR,
