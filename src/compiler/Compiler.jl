@@ -380,7 +380,10 @@ Base.@nospecializeinfer function compile_mlir!(
         cubinChip = "sm_$(cuda_sm_major)$(cuda_sm_minor)"
         cuda_get_kernel = div(MLIR.API.ReactantHermeticCudaGetVersion(), 1000) == 12
 
-        jit = "convert-polygeist-to-llvm{backend=cuda preserve-xla-funcs=true cuda-get-kernel=$(cuda_get_kernel)},strip-gpu-info,nvvm-attach-target{chip=$(cubinChip) features=$(cubinFeatures()) O=$(cuOptLevel[])},enzymexla-gpu-module-to-binary{format=$(cubinFormat[]) toolkit=$toolkit parallel=true},lower-jit,symbol-dce"
+        # `deduplicate-gpu-modules` merges structurally identical kernels before they are compiled to
+        # binaries; the host wrappers that launch them then differ only in name, so
+        # `remove-duplicate-func-def` merges those before `lower-jit` compiles each one.
+        jit = "deduplicate-gpu-modules,convert-polygeist-to-llvm{backend=cuda preserve-xla-funcs=true cuda-get-kernel=$(cuda_get_kernel)},strip-gpu-info,nvvm-attach-target{chip=$(cubinChip) features=$(cubinFeatures()) O=$(cuOptLevel[])},enzymexla-gpu-module-to-binary{format=$(cubinFormat[]) toolkit=$toolkit parallel=true},remove-duplicate-func-def,lower-jit,symbol-dce"
     end
 
     recognize_comms = true
