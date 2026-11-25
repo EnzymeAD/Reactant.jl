@@ -125,6 +125,13 @@ EnzymeCore.ignore_derivatives
 clear_compilation_cache!
 ```
 
+## PyTorch Import
+
+```@docs
+Reactant.import_torch
+Reactant.torch_layout
+```
+
 ## Internal utils
 
 ```@docs
