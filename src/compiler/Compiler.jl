@@ -18,7 +18,11 @@ import ..Reactant:
     append_path,
     TracedType,
     MPI_REQUEST_WIDTH
-import Reactant: OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
+import Reactant:
+    OptimizeCommunicationOptions,
+    ShardyPropagationOptions,
+    CompileOptions,
+    MultiFloatOptions
 using Reactant_jll: Reactant_jll
 
 include("Macros.jl")
@@ -1001,8 +1005,13 @@ Base.@nospecializeinfer function compile_mlir!(
         end
     end
 
-    if compile_options.multifloat !== nothing
-        run_pass_pipeline!(mod, String(compile_options.multifloat), "multifloat")
+    # Metal has no `Float64`, so it is emulated by default
+    multifloat = compile_options.multifloat
+    if ismissing(multifloat)
+        multifloat = backend == "metal" ? MultiFloatOptions() : nothing
+    end
+    if multifloat !== nothing
+        run_pass_pipeline!(mod, String(multifloat), "multifloat")
     end
 
     # shardy passes
