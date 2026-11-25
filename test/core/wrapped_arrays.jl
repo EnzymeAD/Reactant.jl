@@ -310,3 +310,40 @@ end
 
     @test Array(@jit(permutedims!_reshaped(A_ra, B_ra))) ≈ permutedims!_reshaped(A, B)
 end
+
+@testset "copyto! mixing host/device arrays and wrappers (#3585, #3584)" begin
+    h = Reactant.TestUtils.construct_test_array(Float32, 4, 4)
+    x = Reactant.to_rarray(copy(h))
+
+    # Concrete / wrapped concrete -> host
+    for (src_dev, src_host) in (
+        (x, h),
+        (x', h'),
+        (view(x, :, :), view(h, :, :)),
+        (PermutedDimsArray(x, (2, 1)), PermutedDimsArray(h, (2, 1))),
+        (Diagonal(x[:, 1]), Diagonal(h[:, 1])),
+    )
+        dst = similar(h)
+        @test which(
+            Base.copyto_unaliased!,
+            typeof((IndexStyle(dst), dst, IndexStyle(src_dev), src_dev)),
+        ).module === Reactant
+        @test copyto!(dst, src_dev) ≈ src_host
+    end
+
+    @test which(Array, typeof((LowerTriangular(x'),))).module === Reactant
+    @test Array(LowerTriangular(x')) ≈ Array(LowerTriangular(h'))
+    @test LowerTriangular(x') ≈ LowerTriangular(Reactant.to_rarray(Matrix(h')))
+
+    # Host / wrapped host -> concrete
+    h2 = Reactant.TestUtils.construct_test_array(Float32, 4, 4) .+ 1.0f0
+    x_dst = Reactant.to_rarray(zeros(Float32, 4, 4))
+    for src_host in
+        (h2, h2', view(h2, :, :), PermutedDimsArray(h2, (2, 1)), Diagonal(h2[:, 1]))
+        @test which(
+            Base.copyto_unaliased!,
+            typeof((IndexStyle(x_dst), x_dst, IndexStyle(src_host), src_host)),
+        ).module === Reactant
+        @test Array(copyto!(x_dst, src_host)) ≈ src_host
+    end
+end
