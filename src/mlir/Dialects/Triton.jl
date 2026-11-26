@@ -864,6 +864,66 @@ function extern_elementwise(
 end
 
 """
+`fpsan_barrier`
+
+Apply a deterministic, non-homomorphic transformation to the input\'s
+FPSan payload. This makes the placement of the boundary observable
+without changing the input\'s shape, element type, or layout.
+
+The frontend emits this operation only when FPSan is enabled. It is
+neither a synchronization barrier nor a floating-point rounding mode.
+"""
+function fpsan_barrier(
+    input::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "tt.fpsan_barrier",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`fpsan_homomorphic_cast`
+
+Preserve the low bits of the input\'s FPSan payload in the destination
+floating-point type. Unlike an ordinary FPSan downcast, this operation
+preserves addition and multiplication. Widening is not supported.
+
+The frontend emits this operation only when FPSan is enabled.
+"""
+function fpsan_homomorphic_cast(input::Value; result::IR.Type, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "tt.fpsan_homomorphic_cast",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `fp_to_fp`
 
 Floating point casting for custom types (F8), and non-default rounding modes.
@@ -1183,6 +1243,13 @@ function make_tensor_descriptor(
     )
 end
 
+"""
+`map_elementwise`
+
+The scalar function and its callees may contain memory-effect-free
+operations, `llvm.intr.assume`, `tt.assert`, and `tt.print`.
+These operations must lower without shared-memory scratch.
+"""
 function map_elementwise(
     srcs::Vector{Value};
     result::Vector{IR.Type},
@@ -1354,6 +1421,13 @@ function ptr_to_int(src::Value; result::IR.Type, location=Location())
     )
 end
 
+"""
+`reduce`
+
+The combiner and its callees may contain memory-effect-free operations,
+`llvm.intr.assume`, `tt.assert`, and `tt.print`.
+These operations must lower without shared-memory scratch.
+"""
 function reduce(
     srcs::Vector{Value};
     result::Vector{IR.Type},
@@ -1427,6 +1501,13 @@ function reshape(src::Value; result::IR.Type, efficient_layout=nothing, location
     )
 end
 
+"""
+`scan`
+
+The combiner and its callees may contain memory-effect-free operations,
+`llvm.intr.assume`, `tt.assert`, and `tt.print`.
+These operations must lower without shared-memory scratch.
+"""
 function scan(
     srcs::Vector{Value};
     result::Vector{IR.Type},

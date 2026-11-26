@@ -1261,6 +1261,60 @@ function dot_general_v2(
     )
 end
 
+function dot_general_v3(
+    lhs::Value,
+    rhs::Value,
+    ext_operands::Vector{Value};
+    result::IR.Type,
+    lhs_batching_dimensions,
+    rhs_batching_dimensions,
+    lhs_contracting_dimensions,
+    rhs_contracting_dimensions,
+    precision_config,
+    lhs_precision_type,
+    rhs_precision_type,
+    accumulation_type,
+    lhs_component_count,
+    rhs_component_count,
+    num_primitive_operations,
+    allow_imprecise_accumulation,
+    block_scaling_config,
+    sparsity_config,
+    location=Location(),
+)
+    op_ty_results = IR.Type[result,]
+    operands = Value[lhs, rhs, ext_operands...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("lhs_batching_dimensions", lhs_batching_dimensions),
+        NamedAttribute("rhs_batching_dimensions", rhs_batching_dimensions),
+        NamedAttribute("lhs_contracting_dimensions", lhs_contracting_dimensions),
+        NamedAttribute("rhs_contracting_dimensions", rhs_contracting_dimensions),
+        NamedAttribute("precision_config", precision_config),
+        NamedAttribute("lhs_precision_type", lhs_precision_type),
+        NamedAttribute("rhs_precision_type", rhs_precision_type),
+        NamedAttribute("accumulation_type", accumulation_type),
+        NamedAttribute("lhs_component_count", lhs_component_count),
+        NamedAttribute("rhs_component_count", rhs_component_count),
+        NamedAttribute("num_primitive_operations", num_primitive_operations),
+        NamedAttribute("allow_imprecise_accumulation", allow_imprecise_accumulation),
+        NamedAttribute("block_scaling_config", block_scaling_config),
+        NamedAttribute("sparsity_config", sparsity_config),
+    ]
+
+    return create_operation(
+        "vhlo.dot_general_v3",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function dot_v1(
     lhs::Value, rhs::Value; result::IR.Type, precision_config, location=Location()
 )

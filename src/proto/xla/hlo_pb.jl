@@ -1057,6 +1057,8 @@ struct BufferAllocationProto
     is_tuple::Bool
     is_entry_computation_parameter::Bool
     is_constant::Bool
+    is_persistent::Bool
+    initial_data::Vector{UInt8}
     parameter_number::Int64
     parameter_shape_index::Vector{Int64}
     is_parameter_aliased_with_output::Bool
@@ -1064,8 +1066,8 @@ struct BufferAllocationProto
     color::Int64
     assigned::Vector{var"BufferAllocationProto.Assigned"}
 end
-PB.default_values(::Type{BufferAllocationProto}) = (;index = zero(Int64), size = zero(Int64), is_thread_local = false, is_tuple = false, is_entry_computation_parameter = false, is_constant = false, parameter_number = zero(Int64), parameter_shape_index = Vector{Int64}(), is_parameter_aliased_with_output = false, maybe_live_out = false, color = zero(Int64), assigned = Vector{var"BufferAllocationProto.Assigned"}())
-PB.field_numbers(::Type{BufferAllocationProto}) = (;index = 1, size = 2, is_thread_local = 3, is_tuple = 11, is_entry_computation_parameter = 5, is_constant = 12, parameter_number = 6, parameter_shape_index = 10, is_parameter_aliased_with_output = 13, maybe_live_out = 7, color = 8, assigned = 9)
+PB.default_values(::Type{BufferAllocationProto}) = (;index = zero(Int64), size = zero(Int64), is_thread_local = false, is_tuple = false, is_entry_computation_parameter = false, is_constant = false, is_persistent = false, initial_data = UInt8[], parameter_number = zero(Int64), parameter_shape_index = Vector{Int64}(), is_parameter_aliased_with_output = false, maybe_live_out = false, color = zero(Int64), assigned = Vector{var"BufferAllocationProto.Assigned"}())
+PB.field_numbers(::Type{BufferAllocationProto}) = (;index = 1, size = 2, is_thread_local = 3, is_tuple = 11, is_entry_computation_parameter = 5, is_constant = 12, is_persistent = 14, initial_data = 15, parameter_number = 6, parameter_shape_index = 10, is_parameter_aliased_with_output = 13, maybe_live_out = 7, color = 8, assigned = 9)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:BufferAllocationProto}, _endpos::Int=0, _group::Bool=false)
     index = zero(Int64)
@@ -1074,6 +1076,8 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:BufferAllocationProto}, 
     is_tuple = false
     is_entry_computation_parameter = false
     is_constant = false
+    is_persistent = false
+    initial_data = UInt8[]
     parameter_number = zero(Int64)
     parameter_shape_index = PB.BufferedVector{Int64}()
     is_parameter_aliased_with_output = false
@@ -1094,6 +1098,10 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:BufferAllocationProto}, 
             is_entry_computation_parameter = PB.decode(d, Bool)
         elseif field_number == 12
             is_constant = PB.decode(d, Bool)
+        elseif field_number == 14
+            is_persistent = PB.decode(d, Bool)
+        elseif field_number == 15
+            initial_data = PB.decode(d, Vector{UInt8})
         elseif field_number == 6
             parameter_number = PB.decode(d, Int64)
         elseif field_number == 10
@@ -1110,7 +1118,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:BufferAllocationProto}, 
             Base.skip(d, wire_type)
         end
     end
-    return BufferAllocationProto(index, size, is_thread_local, is_tuple, is_entry_computation_parameter, is_constant, parameter_number, parameter_shape_index[], is_parameter_aliased_with_output, maybe_live_out, color, assigned[])
+    return BufferAllocationProto(index, size, is_thread_local, is_tuple, is_entry_computation_parameter, is_constant, is_persistent, initial_data, parameter_number, parameter_shape_index[], is_parameter_aliased_with_output, maybe_live_out, color, assigned[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::BufferAllocationProto)
@@ -1121,6 +1129,8 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::BufferAllocationProto)
     x.is_tuple != false && PB.encode(e, 11, x.is_tuple)
     x.is_entry_computation_parameter != false && PB.encode(e, 5, x.is_entry_computation_parameter)
     x.is_constant != false && PB.encode(e, 12, x.is_constant)
+    x.is_persistent != false && PB.encode(e, 14, x.is_persistent)
+    !isempty(x.initial_data) && PB.encode(e, 15, x.initial_data)
     x.parameter_number != zero(Int64) && PB.encode(e, 6, x.parameter_number)
     !isempty(x.parameter_shape_index) && PB.encode(e, 10, x.parameter_shape_index)
     x.is_parameter_aliased_with_output != false && PB.encode(e, 13, x.is_parameter_aliased_with_output)
@@ -1137,6 +1147,8 @@ function PB._encoded_size(x::BufferAllocationProto)
     x.is_tuple != false && (encoded_size += PB._encoded_size(x.is_tuple, 11))
     x.is_entry_computation_parameter != false && (encoded_size += PB._encoded_size(x.is_entry_computation_parameter, 5))
     x.is_constant != false && (encoded_size += PB._encoded_size(x.is_constant, 12))
+    x.is_persistent != false && (encoded_size += PB._encoded_size(x.is_persistent, 14))
+    !isempty(x.initial_data) && (encoded_size += PB._encoded_size(x.initial_data, 15))
     x.parameter_number != zero(Int64) && (encoded_size += PB._encoded_size(x.parameter_number, 6))
     !isempty(x.parameter_shape_index) && (encoded_size += PB._encoded_size(x.parameter_shape_index, 10))
     x.is_parameter_aliased_with_output != false && (encoded_size += PB._encoded_size(x.is_parameter_aliased_with_output, 13))
