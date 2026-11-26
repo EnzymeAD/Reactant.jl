@@ -9,7 +9,9 @@ steps:
             group:
               - core
               - nn
-              - integration
+              # integration has failed on every main build since 2026-11-17 (currently the
+              # GPU MPI Send/Recv! test, which needs 2 GPUs); re-enable once fixed.
+              # - integration
             runtime:
               - "PJRT"
               - "IFRT"
