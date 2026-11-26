@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795579925223,
+  "lastUpdate": 1795665896706,
   "repoUrl": "https://github.com/EnzymeAD/Reactant.jl",
   "entries": {
     "Reactant.jl Benchmarks (TFLOP/s)": [
@@ -64861,6 +64861,1653 @@ window.BENCHMARK_DATA = {
           {
             "name": "correlation [2048, 2048]/primal/TPU/Default",
             "value": 38.81445561925602,
+            "unit": "TFLOP/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Paul Berg",
+            "username": "Pangoraw",
+            "email": "naydex.mc+github@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "fdcb7de93ece5c12f0b6722d885beb958cffa7b4",
+          "message": "Bump version from 0.1.27 to 0.1.28",
+          "timestamp": "2026-11-25T13:01:57Z",
+          "url": "https://github.com/EnzymeAD/Reactant.jl/commit/fdcb7de93ece5c12f0b6722d885beb958cffa7b4"
+        },
+        "date": 1795665885042,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "Comrade EHT Imaging 256 x 256 [Float64]/reverse/CPU/Default",
+            "value": 0.021272987781596184,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "Comrade EHT Imaging 64 x 64 [Float64]/primal/CPU/Default",
+            "value": 0.005401965293528303,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "Comrade EHT Imaging 64 x 64 [Float64]/reverse/CPU/Default",
+            "value": 0.0016332253539517322,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "Comrade EHT Imaging 128 x 128 [Float64]/reverse/CPU/Default",
+            "value": 0.006690500929214226,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "Comrade EHT Imaging 128 x 128 [Float64]/primal/CPU/Default",
+            "value": 0.015446829905870872,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "Comrade EHT Imaging 256 x 256 [Float64]/primal/CPU/Default",
+            "value": 0.030416883150329123,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [1024 spins]/reverse/CPU/Julia",
+            "value": -1,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [4096 x 4096]/primal/CPU/Default",
+            "value": 1.9520029400628323,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [1024 x 1024]/primal/CPU/Julia",
+            "value": -1,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [1024 spins]/reverse/CPU/Default_Checkpointing",
+            "value": 0.013246254111924627,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [1024 x 1024]/primal/CPU/StructuredTensors",
+            "value": 0.0005582048152416991,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [8192 spins]/reverse/CPU/Julia",
+            "value": -1,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [8192 spins]/reverse/CPU/Default_Checkpointing",
+            "value": 0.010030648508880751,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [128 spins]/reverse/CPU/Julia",
+            "value": -1,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [256 x 256]/primal/CPU/Julia",
+            "value": -1,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [256 x 256]/primal/CPU/StructuredTensors (Only Detection)",
+            "value": 0.0006104125325130051,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [256 x 256]/primal/CPU/Default",
+            "value": 0.16207212727029854,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [1024 x 1024]/primal/CPU/Default",
+            "value": 1.1673876111085222,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [4096 x 4096]/primal/CPU/StructuredTensors (Only Detection)",
+            "value": 0.00048004433555339296,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [4096 x 4096]/primal/CPU/StructuredTensors",
+            "value": 0.0002858415521409436,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [128 spins]/reverse/CPU/Default",
+            "value": 0.013973875512946255,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [128 spins]/reverse/CPU/Default_Checkpointing",
+            "value": 0.014180087825458682,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [8192 spins]/reverse/CPU/Default_NoBatching",
+            "value": 0.009994295918929294,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [16384 spins]/reverse/CPU/Default_NoBatching_Checkpointing",
+            "value": 0.01304297161009997,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [8192 spins]/reverse/CPU/Default",
+            "value": 0.007985770890958315,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [8192 spins]/reverse/CPU/Default_NoBatching_Checkpointing",
+            "value": 0.010483405378486977,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [256 x 256]/primal/CPU/StructuredTensors",
+            "value": 0.0003344217980943352,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [4096 x 4096]/primal/CPU/Julia",
+            "value": -1,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [1024 x 1024]/primal/CPU/StructuredTensors (Only Detection)",
+            "value": 0.0010502639630654807,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [16384 spins]/reverse/CPU/Default",
+            "value": 0.010506876100248025,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [16384 spins]/reverse/CPU/Default_Checkpointing",
+            "value": 0.012354190816399194,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [1024 spins]/reverse/CPU/Default",
+            "value": 0.013771798561385053,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [1024 spins]/reverse/CPU/Default_NoBatching",
+            "value": 0.014455632062452138,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [1024 spins]/reverse/CPU/Default_NoBatching_Checkpointing",
+            "value": 0.013782682588822343,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [16384 spins]/reverse/CPU/Julia",
+            "value": -1,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [128 spins]/reverse/CPU/Default_NoBatching",
+            "value": 0.014784210787437859,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [128 spins]/reverse/CPU/Default_NoBatching_Checkpointing",
+            "value": 0.014785957934346467,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [16384 spins]/reverse/CPU/Default_NoBatching",
+            "value": 0.012021356982967033,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/reverse/CPU/DefaultAfterEnzyme",
+            "value": 0.0653430446656747,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/primal/CPU/NoOpt",
+            "value": 0.0656486190463342,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/reverse/CPU/NoOpt",
+            "value": 0.24838858919081655,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/reverse/CPU/DefaultAfterEnzyme",
+            "value": 0.0650805611807592,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/reverse/CPU/DefaultAll",
+            "value": 0.06658393834997192,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/reverse/CPU/DisableTransposeReshapeAll",
+            "value": 0.07229060732396851,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/primal/CPU/Default",
+            "value": 0.1985494799587913,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/reverse/CPU/DefaultBeforeEnzyme",
+            "value": 0.04775710684183818,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/reverse/CPU/DefaultAll",
+            "value": 0.2491849174988584,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/reverse/CPU/NoOpt",
+            "value": 0.056219664389366764,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/reverse/CPU/NoOpt",
+            "value": 0.0576152714684207,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/reverse/CPU/DisableTransposeReshapeAfterEnzyme",
+            "value": 0.07363672950229375,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/primal/CPU/Default",
+            "value": 0.08973346072011072,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/primal/CPU/NoOpt",
+            "value": 0.07276959916591831,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/primal/CPU/DisableTransposeReshape",
+            "value": 0.06763837722996967,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/reverse/CPU/DefaultBeforeEnzyme",
+            "value": 0.05950214522293633,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/reverse/CPU/DefaultAfterEnzyme",
+            "value": 0.29375894286727333,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/primal/CPU/Default",
+            "value": 0.07538903142558827,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/reverse/CPU/DefaultAll",
+            "value": 0.06640016656360002,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/reverse/CPU/DisableTransposeReshapeBeforeEnzyme",
+            "value": 0.054246643974004485,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/reverse/CPU/DefaultBeforeEnzyme",
+            "value": 0.2572469584944143,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/primal/CPU/NoOpt",
+            "value": 0.18629740180441665,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NUFFT M=100000 N=128^2 [Float64]/reverse/CPU/analytic type 1",
+            "value": 0.002383913512741533,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NUFFT M=100000 N=128^2 [Float64]/reverse/CPU/Enzyme",
+            "value": 0.0017050166741897513,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NUFFT M=100000 N=128^2 [Float64]/primal/CPU/type 2",
+            "value": 0.0014675398949852946,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "Oceananigans/DifferentiateTracerError/CPU/Reverse",
+            "value": 0.04701322097170586,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "jacobi_2d [512, 512, 1024]/primal/CPU/Default_manual_vectorized",
+            "value": 0.008154381708149291,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "gesummv [4096]/primal/CPU/Default_manual_vectorized",
+            "value": 0.0038291136748722426,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bicg [2048, 4096]/primal/CPU/Default_manual_vectorized",
+            "value": 0.0421852731113646,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "atax [2048]/primal/CPU/Default_manual_vectorized",
+            "value": 0.03563449592291137,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "covariance [2048, 2048]/primal/CPU/Default",
+            "value": 0.47534597039658427,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "syrk [2048]/primal/CPU/Julia",
+            "value": -1,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "2mm [2048]/primal/CPU/Default_manual_vectorized",
+            "value": 1.2554980225396972,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "doitgen [256, 1024, 512]/primal/CPU/Default_manual_vectorized",
+            "value": 0.862602797407277,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "2mm [2048]/primal/CPU/Default",
+            "value": 1.0530029651657702,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "doitgen [256, 1024, 512]/primal/CPU/Default",
+            "value": 0.8280668834810986,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bicg [2048, 4096]/primal/CPU/Julia",
+            "value": -1,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "jacobi_1d [2048, 1024]/primal/CPU/Default_manual_vectorized",
+            "value": 0.009188647348467962,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "covariance [2048, 2048]/primal/CPU/Default_manual_vectorized",
+            "value": 1.7242464208285417,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "atax [2048]/primal/CPU/Julia",
+            "value": -1,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "syrk [2048]/primal/CPU/Default_manual_vectorized",
+            "value": 1.516533217193513,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "correlation [2048, 2048]/primal/CPU/Default",
+            "value": 0.5046995743358931,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "correlation [2048, 2048]/primal/CPU/Julia",
+            "value": -1,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "atax [2048]/primal/CPU/Default",
+            "value": 0.03341282843310052,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "correlation [2048, 2048]/primal/CPU/Default_manual_vectorized",
+            "value": 0.5217869417674699,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "3mm [256, 1024, 2048, 4096]/primal/CPU/Default",
+            "value": 0.9580350577794021,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "heat_3d [128, 128, 128, 256]/primal/CPU/Default",
+            "value": 0.009857187602833143,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "heat_3d [128, 128, 128, 256]/primal/CPU/Default_manual_vectorized",
+            "value": 0.009790754245012282,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "gemmver [2048]/primal/CPU/Default_manual_vectorized",
+            "value": 0.0018720379489271185,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "2mm [2048]/primal/CPU/Julia",
+            "value": -1,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "mvt [4096]/primal/CPU/Default_manual_vectorized",
+            "value": 0.05760977280393879,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "gemmver [2048]/primal/CPU/Default",
+            "value": 0.004552765378645749,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "gemmver [2048]/primal/CPU/Julia",
+            "value": -1,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "gesummv [4096]/primal/CPU/Julia",
+            "value": -1,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "jacobi_1d [2048, 1024]/primal/CPU/Default",
+            "value": 0.009148504387166877,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "jacobi_2d [512, 512, 1024]/primal/CPU/Julia",
+            "value": -1,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "fdtd_2d [1024, 2048, 256]/primal/CPU/Julia",
+            "value": -1,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "gemm [2048, 4096]/primal/CPU/Default",
+            "value": 1.6433122732808314,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "jacobi_1d [2048, 1024]/primal/CPU/Julia",
+            "value": -1,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "mvt [4096]/primal/CPU/Julia",
+            "value": -1,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bicg [2048, 4096]/primal/CPU/Default",
+            "value": 0.041549256917563795,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "doitgen [256, 1024, 512]/primal/CPU/Julia",
+            "value": -1,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "gesummv [4096]/primal/CPU/Default",
+            "value": 0.031252823741010544,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "jacobi_2d [512, 512, 1024]/primal/CPU/Default",
+            "value": 0.00815073166653312,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "gemm [2048, 4096]/primal/CPU/Julia",
+            "value": -1,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "fdtd_2d [1024, 2048, 256]/primal/CPU/Default",
+            "value": 0.0037846708361416984,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "fdtd_2d [1024, 2048, 256]/primal/CPU/Default_manual_vectorized",
+            "value": 0.006228649176938189,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "covariance [2048, 2048]/primal/CPU/Julia",
+            "value": -1,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "syr2k [2048]/primal/CPU/Default_manual_vectorized",
+            "value": 0.5502291681055672,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "3mm [256, 1024, 2048, 4096]/primal/CPU/Julia",
+            "value": -1,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "syr2k [2048]/primal/CPU/Julia",
+            "value": -1,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "heat_3d [128, 128, 128, 256]/primal/CPU/Julia",
+            "value": -1,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "mvt [4096]/primal/CPU/Default",
+            "value": 0.04860346953619307,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "gemm [2048, 4096]/primal/CPU/Default_manual_vectorized",
+            "value": 1.503717838043543,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "syrk [2048]/primal/CPU/Default",
+            "value": 1.4511494668617735,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "3mm [256, 1024, 2048, 4096]/primal/CPU/Default_manual_vectorized",
+            "value": 0.955950415036672,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "syr2k [2048]/primal/CPU/Default",
+            "value": 0.6192643283794242,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "Comrade EHT Imaging 128 x 128 [Float64]/primal/CUDA/Default",
+            "value": 0.3127344514756495,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "Comrade EHT Imaging 256 x 256 [Float64]/primal/CUDA/Default",
+            "value": 0.9145520497420921,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "Comrade EHT Imaging 64 x 64 [Float64]/reverse/CUDA/Default",
+            "value": 0.17489617839776678,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "Comrade EHT Imaging 128 x 128 [Float64]/reverse/CUDA/Default",
+            "value": 0.4533863698155119,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "Comrade EHT Imaging 256 x 256 [Float64]/reverse/CUDA/Default",
+            "value": 1.630233396510513,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "Comrade EHT Imaging 64 x 64 [Float64]/primal/CUDA/Default",
+            "value": 0.1578905703004726,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [256 x 256]/primal/CUDA/Default",
+            "value": 1.4479360954463265,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [16384 spins]/reverse/CUDA/Default_Checkpointing",
+            "value": 0.5363897163475106,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [1024 spins]/reverse/CUDA/Default_NoBatching",
+            "value": 0.03591693705666777,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [1024 spins]/reverse/CUDA/Default",
+            "value": 0.03652750174480566,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [1024 x 1024]/primal/CUDA/Default",
+            "value": 37.19747643157948,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [128 spins]/reverse/CUDA/Default",
+            "value": 0.007054147127730407,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [1024 spins]/reverse/CUDA/Default_NoBatching_Checkpointing",
+            "value": 0.04170277067541954,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [4096 x 4096]/primal/CUDA/StructuredTensors (Only Detection)",
+            "value": 14.93541460708818,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [256 x 256]/primal/CUDA/StructuredTensors",
+            "value": 0.004027378589793372,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [128 spins]/reverse/CUDA/Default_NoBatching",
+            "value": 0.006942799627343797,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [4096 x 4096]/primal/CUDA/StructuredTensors",
+            "value": 0.009640533414752009,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [128 spins]/reverse/CUDA/Default_Checkpointing",
+            "value": 0.007088047911000618,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [4096 x 4096]/primal/CUDA/Default",
+            "value": 114.0870344224247,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [8192 spins]/reverse/CUDA/Default",
+            "value": 0.252198654219291,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [256 x 256]/primal/CUDA/StructuredTensors (Only Detection)",
+            "value": 0.2569287995691942,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [8192 spins]/reverse/CUDA/Default_NoBatching_Checkpointing",
+            "value": 0.32678361533782646,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [16384 spins]/reverse/CUDA/Default",
+            "value": 0.5059077423142706,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [16384 spins]/reverse/CUDA/Default_NoBatching",
+            "value": 0.5881030987345826,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [8192 spins]/reverse/CUDA/Default_Checkpointing",
+            "value": 0.3081976147215544,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [8192 spins]/reverse/CUDA/Default_NoBatching",
+            "value": 0.2904770922555139,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [128 spins]/reverse/CUDA/Default_NoBatching_Checkpointing",
+            "value": 0.0070306527284223356,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [1024 x 1024]/primal/CUDA/StructuredTensors (Only Detection)",
+            "value": 3.546418033264594,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [1024 x 1024]/primal/CUDA/StructuredTensors",
+            "value": 0.010450776705341969,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [1024 spins]/reverse/CUDA/Default_Checkpointing",
+            "value": 0.04235049020554157,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [16384 spins]/reverse/CUDA/Default_NoBatching_Checkpointing",
+            "value": 0.5382092839273753,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/primal/CUDA/Default",
+            "value": 6.443785978142867,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/reverse/CUDA/NoOpt",
+            "value": 5.694567550460883,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/reverse/CUDA/DisableScatterGatherAll",
+            "value": 5.502597052282929,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/primal/CUDA/Default",
+            "value": 15.430956603493904,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/primal/CUDA/DisableTransposeReshape",
+            "value": 12.381378863924201,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/reverse/CUDA/DefaultAll",
+            "value": 1.8483836249946308,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/reverse/CUDA/DisableScatterGatherPadAll",
+            "value": 5.2133235733206815,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/reverse/CUDA/DefaultBeforeEnzyme",
+            "value": 6.452716059181982,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/primal/CUDA/NoOpt",
+            "value": 99.79819697015978,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/reverse/CUDA/DisableTransposeReshapeAfterEnzyme",
+            "value": 10.287620655709633,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/primal/CUDA/Default",
+            "value": 1.7530454108946514,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/reverse/CUDA/DisableTransposeReshapeAll",
+            "value": 6.013067432798064,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/reverse/CUDA/NoOpt",
+            "value": 1.9176928875553574,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/reverse/CUDA/DisableTransposeReshapeAll",
+            "value": 10.263237682127372,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/reverse/CUDA/DefaultAfterEnzyme",
+            "value": 87.09810320191386,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/reverse/CUDA/DefaultAll",
+            "value": 6.68549686296874,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/reverse/CUDA/DefaultAll",
+            "value": 5.357736858119631,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/reverse/CUDA/DisableTransposeReshapeBeforeEnzyme",
+            "value": 2.4207794499887973,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/reverse/CUDA/NoOpt",
+            "value": 2.4813750691298884,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/reverse/CUDA/NoOpt",
+            "value": 6.532176494086073,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/primal/CUDA/NoOpt",
+            "value": 6.082962132360848,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/reverse/CUDA/DefaultBeforeEnzyme",
+            "value": 7.021086911490751,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/reverse/CUDA/DefaultBeforeEnzyme",
+            "value": 85.841492341083,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/reverse/CUDA/DefaultAfterEnzyme",
+            "value": 1.9376914035529305,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/primal/CUDA/NoOpt",
+            "value": 11.89551440570799,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/reverse/CUDA/DisablePadAll",
+            "value": 5.301976628088414,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/primal/CUDA/Default",
+            "value": 102.43286514768731,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/reverse/CUDA/NoOpt",
+            "value": 85.56821380809869,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/primal/CUDA/NoOpt",
+            "value": 1.630263585545381,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/reverse/CUDA/DefaultAfterEnzyme",
+            "value": 6.721857588083188,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/reverse/CUDA/DefaultAfterEnzyme",
+            "value": 11.218616281776438,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/primal/CUDA/NoOpt",
+            "value": 5.26254317612512,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/reverse/CUDA/DefaultAll",
+            "value": 12.177782431363507,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/reverse/CUDA/DefaultAll",
+            "value": 86.86874792724642,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/reverse/CUDA/DefaultBeforeEnzyme",
+            "value": 1.8301193385893557,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/primal/CUDA/Default",
+            "value": 5.424019336713748,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NUFFT M=100000 N=128^2 [Float64]/reverse/CUDA/Enzyme",
+            "value": 21.69025651049949,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NUFFT M=100000 N=128^2 [Float64]/reverse/CUDA/analytic type 1",
+            "value": 9.494307689997447,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NUFFT M=100000 N=128^2 [Float64]/primal/CUDA/type 2",
+            "value": 16.138313429786194,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "Oceananigans/DifferentiateTracerError/CUDA/Reverse",
+            "value": 35.41936788858208,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "2mm [2048]/primal/CUDA/Default_manual_vectorized",
+            "value": 48.872666893524396,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "doitgen [256, 1024, 512]/primal/CUDA/Default",
+            "value": 68.55007920776572,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "gemm [2048, 4096]/primal/CUDA/Default_manual_vectorized",
+            "value": 98.93228458194099,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "gemmver [2048]/primal/CUDA/Default_manual_vectorized",
+            "value": 0.5639214892499039,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "atax [2048]/primal/CUDA/Default",
+            "value": 0.2623071962851157,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "syr2k [2048]/primal/CUDA/Default",
+            "value": 33.97032536804536,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "gesummv [4096]/primal/CUDA/Default",
+            "value": 0.18304836491834134,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "syr2k [2048]/primal/CUDA/Default_manual_vectorized",
+            "value": 34.379177419428856,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "syrk [2048]/primal/CUDA/Default_manual_vectorized",
+            "value": 34.727663604145064,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "gemmver [2048]/primal/CUDA/Default",
+            "value": 0.5574258481302374,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "atax [2048]/primal/CUDA/Default_manual_vectorized",
+            "value": 0.26304848423701643,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "gesummv [4096]/primal/CUDA/Default_manual_vectorized",
+            "value": 0.4543685536012677,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "covariance [2048, 2048]/primal/CUDA/Default_manual_vectorized",
+            "value": 34.949764275949214,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "correlation [2048, 2048]/primal/CUDA/Default",
+            "value": 36.99556004987552,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "3mm [256, 1024, 2048, 4096]/primal/CUDA/Default",
+            "value": 15.245014578456624,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bicg [2048, 4096]/primal/CUDA/Default",
+            "value": 0.4459625106511385,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bicg [2048, 4096]/primal/CUDA/Default_manual_vectorized",
+            "value": 0.4309665319104931,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "doitgen [256, 1024, 512]/primal/CUDA/Default_manual_vectorized",
+            "value": 69.08050874482765,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "2mm [2048]/primal/CUDA/Default",
+            "value": 48.256382308254544,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "jacobi_1d [2048, 1024]/primal/CUDA/Default",
+            "value": 0.006245309067715615,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "jacobi_1d [2048, 1024]/primal/CUDA/Default_manual_vectorized",
+            "value": 0.005958830630655744,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "covariance [2048, 2048]/primal/CUDA/Default",
+            "value": 36.5581462624604,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "heat_3d [128, 128, 128, 256]/primal/CUDA/Default_manual_vectorized",
+            "value": 2.6527734778297742,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "gemm [2048, 4096]/primal/CUDA/Default",
+            "value": 91.4791204345407,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "fdtd_2d [1024, 2048, 256]/primal/CUDA/Default_manual_vectorized",
+            "value": 1.208735445497225,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "mvt [4096]/primal/CUDA/Default",
+            "value": 0.21684406200884226,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "jacobi_2d [512, 512, 1024]/primal/CUDA/Default",
+            "value": 0.33848507556512364,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "syrk [2048]/primal/CUDA/Default",
+            "value": 34.39932981953437,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "correlation [2048, 2048]/primal/CUDA/Default_manual_vectorized",
+            "value": 38.49315820564411,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "3mm [256, 1024, 2048, 4096]/primal/CUDA/Default_manual_vectorized",
+            "value": 15.43958523093827,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "mvt [4096]/primal/CUDA/Default_manual_vectorized",
+            "value": 0.2212821219509944,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "heat_3d [128, 128, 128, 256]/primal/CUDA/Default",
+            "value": 2.6058482279912467,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "fdtd_2d [1024, 2048, 256]/primal/CUDA/Default",
+            "value": 17.11636871233971,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "jacobi_2d [512, 512, 1024]/primal/CUDA/Default_manual_vectorized",
+            "value": 0.3259507515160013,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "Comrade EHT Imaging 256 x 256 [Float32]/primal/TPU/Default",
+            "value": 0.5945444655092793,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "Comrade EHT Imaging 128 x 128 [Float32]/reverse/TPU/Default",
+            "value": 0.0011894896193629795,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "Comrade EHT Imaging 256 x 256 [Float32]/reverse/TPU/Default",
+            "value": 0.005834710894957837,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "Comrade EHT Imaging 64 x 64 [Float32]/primal/TPU/Default",
+            "value": 0.13415432250038628,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "Comrade EHT Imaging 128 x 128 [Float32]/primal/TPU/Default",
+            "value": 0.18145401794704633,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "Comrade EHT Imaging 64 x 64 [Float32]/reverse/TPU/Default",
+            "value": 0.0007218249877678171,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [8192 spins]/reverse/TPU/Default_NoBatching_Checkpointing",
+            "value": 0.07926377041307867,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [4096 x 4096]/primal/TPU/StructuredTensors (Only Detection)",
+            "value": 362.768719294606,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [4096 x 4096]/primal/TPU/Default",
+            "value": 380.8533189736237,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [1024 spins]/reverse/TPU/Default_Checkpointing",
+            "value": 0.01655695069080171,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [1024 x 1024]/primal/TPU/Default",
+            "value": 173.48565961143933,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [1024 x 1024]/primal/TPU/StructuredTensors",
+            "value": 172.58670963296746,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [1024 spins]/reverse/TPU/Default_NoBatching_Checkpointing",
+            "value": 0.010205089599232579,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [256 x 256]/primal/TPU/StructuredTensors",
+            "value": 3.314961032901599,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [16384 spins]/reverse/TPU/Default_Checkpointing",
+            "value": 0.21852291169389523,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [16384 spins]/reverse/TPU/Default_NoBatching",
+            "value": 0.15661544074951633,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [1024 spins]/reverse/TPU/Default",
+            "value": 0.014732194847949605,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [128 spins]/reverse/TPU/Default",
+            "value": 0.0018685201330013803,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [128 spins]/reverse/TPU/Default_Checkpointing",
+            "value": 0.002108583173653396,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [16384 spins]/reverse/TPU/Default",
+            "value": 0.20484742703292833,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [16384 spins]/reverse/TPU/Default_NoBatching_Checkpointing",
+            "value": 0.1504712072788566,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [8192 spins]/reverse/TPU/Default_NoBatching",
+            "value": 0.08381921532277083,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [8192 spins]/reverse/TPU/Default_Checkpointing",
+            "value": 0.12109616397771376,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [1024 x 1024]/primal/TPU/StructuredTensors (Only Detection)",
+            "value": 174.11794270243803,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [1024 spins]/reverse/TPU/Default_NoBatching",
+            "value": 0.010740213671301894,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [128 spins]/reverse/TPU/Default_NoBatching",
+            "value": 0.0013677039297569414,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [256 x 256]/primal/TPU/Default",
+            "value": 3.7850761730109697,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [128 spins]/reverse/TPU/Default_NoBatching_Checkpointing",
+            "value": 0.0013333720378113562,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [4096 x 4096]/primal/TPU/StructuredTensors",
+            "value": 361.5603230231879,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bloch_rf [8192 spins]/reverse/TPU/Default",
+            "value": 0.11284749509107962,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NewtonSchulz [256 x 256]/primal/TPU/StructuredTensors (Only Detection)",
+            "value": 3.750203644115518,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/reverse/TPU/NoOpt",
+            "value": 50.64355356360275,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/reverse/TPU/DefaultBeforeEnzyme",
+            "value": 4.887065700931998,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/reverse/TPU/DefaultBeforeEnzyme",
+            "value": 43.14780463974374,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/primal/TPU/Default",
+            "value": 1.4851044401367133,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/reverse/TPU/DefaultBeforeEnzyme",
+            "value": 3.720135792548115,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/reverse/TPU/DefaultAfterEnzyme",
+            "value": 43.0541430463988,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/primal/TPU/Default",
+            "value": 21.487618968999104,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/reverse/TPU/NoOpt",
+            "value": 17.515204498697972,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/reverse/TPU/NoOpt",
+            "value": 5.115018065702171,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/reverse/TPU/DisablePadAll",
+            "value": 20.74113260918006,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/reverse/TPU/DefaultAll",
+            "value": 5.761983976284817,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/reverse/TPU/DefaultAll",
+            "value": 21.096575015262754,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/reverse/TPU/DisableScatterGatherPadAll",
+            "value": 20.846674756030275,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/reverse/TPU/DisableTransposeReshapeAll",
+            "value": 5.180819027741729,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/reverse/TPU/DefaultAfterEnzyme",
+            "value": 5.065272693034903,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/primal/TPU/DisableTransposeReshape",
+            "value": 3.101989007505629,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/primal/TPU/NoOpt",
+            "value": 17.14521984598098,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/primal/TPU/NoOpt",
+            "value": 4.441310839310434,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/reverse/TPU/DisableTransposeReshapeAll",
+            "value": 20.26602779918308,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/reverse/TPU/DefaultAfterEnzyme",
+            "value": 3.4873707082553485,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/reverse/TPU/DefaultAfterEnzyme",
+            "value": 5.731595650401103,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/primal/TPU/Default",
+            "value": 2.763806509936056,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/primal/TPU/NoOpt",
+            "value": 3.0210299295612963,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/reverse/TPU/NoOpt",
+            "value": 5.426362495185009,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/primal/TPU/NoOpt",
+            "value": 1.3144268747303665,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/reverse/TPU/DisableTransposeReshapeAfterEnzyme",
+            "value": 5.191812279764636,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/reverse/TPU/DisableScatterGatherAll",
+            "value": 20.799323284484604,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/reverse/TPU/NoOpt",
+            "value": 3.7114172239871683,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/reverse/TPU/DefaultAll",
+            "value": 4.905238168295918,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/reverse/TPU/DefaultAll",
+            "value": 43.18365759857307,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/reverse/TPU/DefaultAll",
+            "value": 3.5556757545481292,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/primal/TPU/NoOpt",
+            "value": 46.14621359004868,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "DGCNN [3, 128, 256]/reverse/TPU/DisableTransposeReshapeBeforeEnzyme",
+            "value": 5.182945827841438,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/primal/TPU/Default",
+            "value": 52.68767212960716,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/primal/TPU/Default",
+            "value": 5.166017800389429,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/reverse/TPU/DefaultBeforeEnzyme",
+            "value": 5.7929933615154745,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NUFFT M=100000 N=128^2 [Float32]/reverse/TPU/analytic type 1",
+            "value": 0.1641886397842138,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NUFFT M=100000 N=128^2 [Float32]/primal/TPU/type 2",
+            "value": 0.6256890270941646,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "NUFFT M=100000 N=128^2 [Float32]/reverse/TPU/Enzyme",
+            "value": 0.006600838558234702,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "Oceananigans/DifferentiateTracerError/TPU/Reverse",
+            "value": 2.7726922078734875,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "heat_3d [128, 128, 128, 256]/primal/TPU/Default_manual_vectorized",
+            "value": 0.1295422816925714,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bicg [2048, 4096]/primal/TPU/Default_manual_vectorized",
+            "value": 0.08921236618293192,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "doitgen [256, 1024, 512]/primal/TPU/Default_manual_vectorized",
+            "value": 96.09585149777719,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "gesummv [4096]/primal/TPU/Default",
+            "value": 0.17397120827020213,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "covariance [2048, 2048]/primal/TPU/Default",
+            "value": 41.94297604693821,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "gesummv [4096]/primal/TPU/Default_manual_vectorized",
+            "value": 0.2072756249025098,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "bicg [2048, 4096]/primal/TPU/Default",
+            "value": 0.08853049493513095,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "fdtd_2d [1024, 2048, 256]/primal/TPU/Default_manual_vectorized",
+            "value": 0.6606275120727962,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "jacobi_2d [512, 512, 1024]/primal/TPU/Default_manual_vectorized",
+            "value": 0.24264326820974788,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "jacobi_2d [512, 512, 1024]/primal/TPU/Default",
+            "value": 0.2432411661826591,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "gemm [2048, 4096]/primal/TPU/Default_manual_vectorized",
+            "value": 86.9487007713425,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "3mm [256, 1024, 2048, 4096]/primal/TPU/Default",
+            "value": 18.340139787517508,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "doitgen [256, 1024, 512]/primal/TPU/Default",
+            "value": 76.01076678366692,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "2mm [2048]/primal/TPU/Default",
+            "value": 88.57393238028943,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "jacobi_1d [2048, 1024]/primal/TPU/Default",
+            "value": 0.006068667547521173,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "syrk [2048]/primal/TPU/Default_manual_vectorized",
+            "value": 49.49106062725794,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "gemm [2048, 4096]/primal/TPU/Default",
+            "value": 93.47715554383129,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "syrk [2048]/primal/TPU/Default",
+            "value": 49.16035662910706,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "correlation [2048, 2048]/primal/TPU/Default_manual_vectorized",
+            "value": 50.88213072278537,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "3mm [256, 1024, 2048, 4096]/primal/TPU/Default_manual_vectorized",
+            "value": 16.992466552874017,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "atax [2048]/primal/TPU/Default_manual_vectorized",
+            "value": 0.049505154905415,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "mvt [4096]/primal/TPU/Default",
+            "value": 0.15882227655624828,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "gemmver [2048]/primal/TPU/Default",
+            "value": 0.11887391239272271,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "atax [2048]/primal/TPU/Default",
+            "value": 0.0505142376144368,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "syr2k [2048]/primal/TPU/Default_manual_vectorized",
+            "value": 45.158964029910514,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "syr2k [2048]/primal/TPU/Default",
+            "value": 45.46178192065901,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "fdtd_2d [1024, 2048, 256]/primal/TPU/Default",
+            "value": 0.7057518635852226,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "mvt [4096]/primal/TPU/Default_manual_vectorized",
+            "value": 0.16087422513843155,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "2mm [2048]/primal/TPU/Default_manual_vectorized",
+            "value": 88.1154890710654,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "covariance [2048, 2048]/primal/TPU/Default_manual_vectorized",
+            "value": 47.74452710882374,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "heat_3d [128, 128, 128, 256]/primal/TPU/Default",
+            "value": 0.12949344450879652,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "jacobi_1d [2048, 1024]/primal/TPU/Default_manual_vectorized",
+            "value": 0.006163655690130606,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "gemmver [2048]/primal/TPU/Default_manual_vectorized",
+            "value": 0.12424767484700058,
+            "unit": "TFLOP/s"
+          },
+          {
+            "name": "correlation [2048, 2048]/primal/TPU/Default",
+            "value": 39.929207117036334,
             "unit": "TFLOP/s"
           }
         ]
