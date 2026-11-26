@@ -82,94 +82,83 @@ function XLA.compile(
     )
 end
 
-function execute_ir(N, M, n_outs, with_device::Bool, nmesh_ids::Int64)
-    ptr = @static if VERSION < v"1.12"
-        sizeof(Int) == sizeof(Int64) ? "i64" : "i32"
+# Call `XLAExecuteSharded`, keeping its argument and result arrays on the stack. The function
+# is called by name: `XLA.__init__` defines it in Julia's JIT.
+LLVM.Interop.@llvmgenerated builder function xla_execute_sharded(
+    exec::Ptr{Cvoid},
+    device::Ptr{Cvoid},
+    inputs::NTuple{N,Ptr{Cvoid}},
+    donated_args::NTuple{N,UInt8},
+    ::Val{n_outs},
+)::Tuple{NTuple{n_outs,Ptr{Cvoid}},NTuple{n_outs,Ptr{Cvoid}},Bool} where {N,n_outs}
+    mod = LLVM.Interop.current_module(builder)
+    T_ptr = exec.value_type  # how Julia lowers a `Ptr` (an integer before Julia 1.12)
+    T_i8 = LLVM.Int8Type()
+    T_cint = convert(LLVM.LLVMType, Cint)
+    T_buf = LLVM.PointerType(T_i8)
+
+    # void XLAExecuteSharded(exec, num_args, op_args, device, is_arg_donatable,
+    #                        num_results, op_results, futures, future_results)
+    ft = LLVM.FunctionType(
+        LLVM.VoidType(), [T_ptr, T_cint, T_buf, T_ptr, T_buf, T_cint, T_buf, T_buf, T_buf]
+    )
+    f = LLVM.Function(mod, "XLAExecuteSharded", ft)
+    # the buffers aren't captured (LLVM 21 replaced `nocapture` by `captures(none)`)
+    nocapture = if LLVM.version() < v"21"
+        LLVM.EnumAttribute(:nocapture)
     else
-        "ptr"
+        LLVM.EnumAttribute(:captures, 0)
     end
-    cint = sizeof(Cint) == sizeof(Int64) ? "i64" : "i32"
-    args = N > 0 ? ", [$N x $ptr] %inps, [$M x i8] %donated" : ""
-    if with_device
-        args = "$ptr %dev $args"
-    else
-        args = "[$nmesh_ids x $ptr] %mesh_ids $args"
+    for (i, access) in
+        ((3, :readonly), (5, :readonly), (7, :writeonly), (8, :writeonly), (9, :writeonly))
+        append!(f.parameter_attributes[i], [LLVM.EnumAttribute(access), nocapture])
     end
 
-    stores = N > 0 ? """
-   store [$N x $ptr] %inps, [$N x $ptr]* %inpa
-   store [$M x i8] %donated, [$M x i8]* %dona
-   	""" : ""
-
-    if !with_device
-        stores *= """
-      store [$nmesh_ids x $ptr] %mesh_ids, [$nmesh_ids x $ptr]* %mesha
-      		"""
+    inputs_buf = LLVM.alloca!(builder, LLVM.ArrayType(T_ptr, N))
+    donated_buf = LLVM.alloca!(builder, LLVM.ArrayType(T_i8, N))
+    if N > 0
+        LLVM.store!(builder, inputs, inputs_buf)
+        LLVM.store!(builder, donated_args, donated_buf)
     end
-
-    extra_str1 = with_device ? "$ptr" : "[$nmesh_ids x $ptr]*, i64"
-    extra_str2 = if with_device
-        "$ptr %dev"
-    else
-        "[$(nmesh_ids) x $ptr]* nocapture readonly %mesha, i64 $(nmesh_ids)"
+    future_buf = LLVM.alloca!(builder, T_i8)
+    if n_outs > 0
+        outputs_buf = LLVM.alloca!(builder, LLVM.ArrayType(T_ptr, n_outs))
+        future_results_buf = LLVM.alloca!(builder, LLVM.ArrayType(T_ptr, n_outs))
     end
+    as_buf(ptr) = LLVM.bitcast!(builder, ptr, T_buf)
+    LLVM.call!(
+        builder,
+        ft,
+        f,
+        [
+            exec,
+            LLVM.ConstantInt(T_cint, N),
+            as_buf(inputs_buf),
+            device,
+            as_buf(donated_buf),
+            LLVM.ConstantInt(T_cint, n_outs),
+            n_outs > 0 ? as_buf(outputs_buf) : LLVM.null(T_buf),
+            future_buf,
+            n_outs > 0 ? as_buf(future_results_buf) : LLVM.null(T_buf),
+        ],
+    )
 
-    fn = if with_device
-        "@XLAExecuteSharded"
-    else
-        "@XLAExecute"
+    # the outputs and their futures (if any), and whether there are futures
+    results = LLVM.Value[]
+    if n_outs > 0
+        push!(results, LLVM.load!(builder, LLVM.ArrayType(T_ptr, n_outs), outputs_buf))
+        push!(
+            results, LLVM.load!(builder, LLVM.ArrayType(T_ptr, n_outs), future_results_buf)
+        )
     end
-
-    decls = """
-declare void @XLAExecuteSharded($ptr %exec, $cint %num_args, [$N x $ptr]* readonly nocapture %op_args, $ptr %device, 
-[$M x i8]* nocapture readonly %is_arg_donatable, $cint %num_results, [$n_outs x $ptr]* writeonly nocapture %op_results, i8* writeonly nocapture %futures, [$n_outs x $ptr]* writeonly nocapture %future_results)
-
-declare void @XLAExecute($ptr %exec, $cint %op_args_len, [$N x $ptr]* readonly nocapture %op_args, [$M x i8]* nocapture readonly %is_arg_donatable, $cint %num_results, [$n_outs x $ptr]* writeonly nocapture %op_results, i8* writeonly nocapture %futures, [$n_outs x $ptr]* writeonly nocapture %future_results)
-    """
-
-    res = if n_outs == 0
-        """
-        $decls
-
-        define { i8 } @f($ptr %exec, $args) alwaysinline {
-           entry:
-           	%inpa = alloca [$N x $ptr]
-           	%dona = alloca [$M x i8]
-           	%mesha = alloca [$nmesh_ids x $ptr]
-           	$stores
-           	%futa = alloca i8
-           	call void $fn($ptr %exec, $cint $N, [$N x $ptr]* nocapture readonly %inpa, $extra_str2, [$M x i8]* nocapture readonly %dona, $cint $n_outs, [$n_outs x $ptr]* nocapture readnone null, i8* nocapture writeonly %futa, [$n_outs x $ptr]* nocapture readnone null)
-           	%fut = load i8, i8* %futa
-           	%fca.2.insert = insertvalue { i8 } undef, i8 %fut, 0
-           	ret { i8 } %fca.2.insert
-        }
-           """
-    else
-        """
-        $decls
-
-        define { [$n_outs x $ptr], [$n_outs x $ptr], i8 } @f($ptr %exec, $args) alwaysinline {
-           entry:
-           	%inpa = alloca [$N x $ptr]
-           	%dona = alloca [$M x i8]
-           	%outa = alloca [$n_outs x $ptr]
-           	%futpa = alloca [$n_outs x $ptr]
-           	%mesha = alloca [$nmesh_ids x $ptr]
-           	$stores
-           	%futa = alloca i8
-           	call void $fn($ptr %exec, $cint $N, [$N x $ptr]* nocapture readonly %inpa, $extra_str2, [$M x i8]* nocapture readonly %dona, $cint $n_outs, [$n_outs x $ptr]* nocapture writeonly %outa, i8* nocapture writeonly %futa, [$n_outs x $ptr]* nocapture writeonly %futpa)
-           	%out = load [$n_outs x $ptr], [$n_outs x $ptr]* %outa
-           	%fut = load i8, i8* %futa
-           	%futp = load [$n_outs x $ptr], [$n_outs x $ptr]* %futpa
-           	%fca.0.insert = insertvalue { [$n_outs x $ptr], [$n_outs x $ptr], i8 } undef, [$n_outs x $ptr] %out, 0
-           	%fca.1.insert = insertvalue { [$n_outs x $ptr], [$n_outs x $ptr], i8 } %fca.0.insert, [$n_outs x $ptr] %futp, 1
-           	%fca.2.insert = insertvalue { [$n_outs x $ptr], [$n_outs x $ptr], i8 } %fca.1.insert, i8 %fut, 2
-           	ret { [$n_outs x $ptr], [$n_outs x $ptr], i8 } %fca.2.insert
-        }
-           """
+    push!(results, LLVM.load!(builder, T_i8, future_buf))
+    T_ret = LLVM.Interop.current_function(builder).function_type.return_type
+    T_ret isa LLVM.StructType || return only(results)
+    ret = LLVM.UndefValue(T_ret)
+    for (i, val) in enumerate(results)
+        ret = LLVM.insert_value!(builder, ret, val, i - 1)
     end
-
-    return res
+    return ret
 end
 
 @generated function XLA.execute_sharded(
@@ -179,7 +168,6 @@ end
     donated_args::NTuple{N,UInt8},
     ::Val{n_outs},
 ) where {N,n_outs}
-    ir = execute_ir(N, N, n_outs, true, 0)
     results = []
     for i in 1:n_outs
         push!(
@@ -190,26 +178,14 @@ end
         )
     end
 
-    args_type = if N > 0
-        (Ptr{Cvoid}, Ptr{Cvoid}, NTuple{N,Ptr{Cvoid}}, NTuple{N,UInt8})
-    else
-        (Ptr{Cvoid}, Ptr{Cvoid})
-    end
-    args = N > 0 ? (:inputs, :donated_args) : ()
-
     if !Reactant.precompiling() || Sys.isapple()
         return quote
             Base.@_inline_meta
             exec = exec.exec
             device = device.device
             GC.@preserve exec device begin
-                outputs, future_res, future = Base.llvmcall(
-                    ($ir, "f"),
-                    Tuple{NTuple{n_outs,Ptr{Cvoid}},NTuple{n_outs,Ptr{Cvoid}},Bool},
-                    Tuple{$args_type...},
-                    exec,
-                    device,
-                    $(args...),
+                outputs, future_res, future = xla_execute_sharded(
+                    exec, device, inputs, donated_args, Val(n_outs)
                 )
             end
             return ($(results...),)

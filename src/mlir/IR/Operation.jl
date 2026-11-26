@@ -2,7 +2,16 @@
     ref::API.MlirOperation
 end
 
-dispose(op::Operation) = mark_dispose(API.mlirOperationDestroy, op)
+function dispose(op::Operation)
+    if mlirIsNull(API.mlirOperationGetBlock(op))
+        # a detached operation, which the caller owns
+        mark_dispose(API.mlirOperationDestroy, op)
+    else
+        # erase an operation from the block that owns it
+        API.mlirOperationDestroy(op)
+    end
+    return nothing
+end
 
 Base.cconvert(::Core.Type{API.MlirOperation}, op::Operation) = op
 Base.unsafe_convert(::Core.Type{API.MlirOperation}, op::Operation) = mark_use(op).ref
@@ -22,8 +31,8 @@ function Base.parse(
     block=Block(),
     location::Location=Location(),
 )
-    return Operation(
-        mark_alloc(API.mlirOperationParse(context, block, code, location, verify))
+    return mark_alloc(
+        Operation(API.mlirOperationParse(context, block, code, location, verify))
     )
 end
 
@@ -81,7 +90,7 @@ end
 
 Creates a deep copy of an operation. The operation is not inserted and ownership is transferred to the caller.
 """
-Base.copy(op::Operation) = Operation(mark_alloc(API.mlirOperationClone(op)))
+Base.copy(op::Operation) = mark_alloc(Operation(API.mlirOperationClone(op)))
 
 """
     context(op)
@@ -288,8 +297,9 @@ verify(operation::Operation) = API.mlirOperationVerify(operation)
 Moves the given operation immediately after the other operation in its parent block. The given operation may be owned by the caller or by its current block. The other operation must belong to a block. In any case, the ownership is transferred to the block of the other operation.
 """
 function move_after!(operation::Operation, other::Operation)
-    mark_donate(operation)
-    return API.mlirOperationMoveAfter(operation, other)
+    API.mlirOperationMoveAfter(operation, other)
+    mark_untracked(operation)
+    return nothing
 end
 
 """
@@ -301,8 +311,9 @@ The other operation must belong to a block.
 In any case, the ownership is transferred to the block of the other operation.
 """
 function move_before!(op::Operation, other::Operation)
-    mark_donate(op)
-    return API.mlirOperationMoveBefore(op, other)
+    API.mlirOperationMoveBefore(op, other)
+    mark_untracked(op)
+    return nothing
 end
 
 """
@@ -337,7 +348,6 @@ function create_operation_common(
             API.mlirOperationStateAddOperands(state, length(operands), operands)
         end
         if !isnothing(owned_regions)
-            mark_donate.(owned_regions)
             GC.@preserve owned_regions begin
                 mlir_regions = Base.unsafe_convert.(API.MlirRegion, owned_regions)
                 API.mlirOperationStateAddOwnedRegions(
@@ -361,7 +371,9 @@ function create_operation_common(
         if mlirIsNull(op)
             error("Create Operation '$name' failed")
         end
-        return Operation(op)
+        # the operation took ownership of the regions
+        isnothing(owned_regions) || foreach(mark_untracked, owned_regions)
+        return mark_alloc(Operation(op))
     end
 end
 

@@ -5,6 +5,7 @@ using ..XLA: XLA
 using Reactant_jll: Reactant_jll
 
 using Libdl: Libdl
+using LLVM: LLVM
 
 include("Client.jl")
 include("Device.jl")
