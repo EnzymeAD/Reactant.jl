@@ -21,7 +21,7 @@ The :code:`absf` operation computes the element-wise absolute value of the input
 .. math::
   \\text{absf}(x)_i = |x|_i
   
-:suffix: Element-wise floating-point arithmetic operations are performed by the target architecture\'s native floating-point instructions. If the :code:`rounding` modifier is specified, the particular rounding mode will be applied to each element of the result. See :ref:`op-group-floating-point` for more details.
+:suffix: Element-wise floating-point arithmetic operations are performed by the target architecture\'s native floating-point instructions. See :ref:`op-group-floating-point` for more details.
 """
 function absf(source::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
     op_ty_results = IR.Type[]
@@ -161,10 +161,16 @@ end
 Allocates memory sufficient to hold :code:`num_elem` elements and returns a
 pointer to the allocated memory, or trap if the request cannot be
 satisfied. The returned address is guaranteed to be aligned to :code:`alignment`
-bytes, which must be a non-zero power of two. By default, the returned address is
-valid only within the context of the current tile thread. If the :code:`global`
-attribute is set, the address may be also be accessed by other tile threads.
-The lifetime of the allocation is limited to the block in which the alloca resides.
+bytes, which must be a non-zero power of two and at least the natural size
+of the pointee type in bytes (e.g. :code:`8` for :code:`f64`, :code:`4` for
+:code:`i32`). By default, the returned address is valid only within the context
+of the current tile thread. If the :code:`global` attribute is set, the address
+may also be accessed by other tile threads. The lifetime of the allocation
+is limited to the block in which the alloca resides.
+
+For :code:`f4E2M1FN`, consecutive elements are packed two per byte, so an
+allocation of :code:`num_elem` elements occupies
+:code:`ceil(num_elem / 2)` bytes and has a natural alignment of one byte.
 """
 function alloca(;
     result::IR.Type, num_elem, alignment, global_=nothing, location=Location()
@@ -346,8 +352,8 @@ before the atomic operation was performed.
 
 The shape (and the element type) of :code:`pointers`, :code:`cmp`,
 :code:`val` and :code:`result` must match. The :code:`atomic_cas` operation
-performs the following steps for every :code:`(pointer, cmp, val)` tuple in one atomic
-transaction. (One atomic transaction per tuple.)
+performs the following steps for every :code:`(pointer, cmp, val)` tuple in
+one atomic transaction. (One atomic transaction per tuple.)
 
 .. code-block:: mlir
 
@@ -437,8 +443,8 @@ stored at each location before the atomic update.
 
 The shapes of :code:`pointers`, :code:`arg`, and :code:`result` must
 match. The element type of the pointer type must match the element types
-of both :code:`arg` and :code:`result`. Each (:code:`pointer`, :code:`arg`) pair is
-processed in a single atomic transaction.
+of both :code:`arg` and :code:`result`. Each (:code:`pointer`, :code:`arg`)
+pair is processed in a single atomic transaction.
 
 .. code-block:: mlir
 
@@ -455,10 +461,12 @@ the corresponding element in :code:`pointers` from the operation.
 The value returned for a masked-out element is implementation-defined.
 The shape of :code:`mask` must match the shape of :code:`pointers`.
 
-The :code:`atomic_addf` operation is defined to round to the nearest even value.
+The :code:`addf` operation is defined to round to the nearest even value.
+
 .. note::
-The current implementation of the compiler flushes denormals to zero. This behavior
-will be fixed in a future version of the compiler and users should not rely on it.
+
+  The current implementation of :code:`addf` compiler flushes denormals to zero. This behavior
+  will be fixed in a future version of the compiler and users should not rely on it.
 
 
 Token-ordered atomic read-modify-write operations are not constrained by
@@ -545,7 +553,7 @@ space. The :code:`index` operands are interpreted as unsigned integers.
 
 The :code:`view` must be a :ref:`type-partition_view` or
 :ref:`type-strided_view`; :ref:`type-gather_scatter_view` is not
-supported. Views with a :code:`padding_value` are not supported.
+supported.
 
 The element type of :code:`value` must match the element type of
 :code:`view`, and the tile shape of :code:`value` must match the tile
@@ -569,6 +577,13 @@ The :code:`U` prefix in UMAX and UMIN distinguishes these from their
 signed counterparts (MAX and MIN) by interpreting the comparison as
 unsigned.
 
+The :code:`addf` operation is defined to round to the nearest even value.
+
+.. note::
+
+  The current implementation of :code:`addf` flushes denormals to zero. This behavior
+  will be fixed in a future version of the compiler and users should not rely on it.
+
 .. note::
 
   :code:`bf16` is supported from Hopper (sm90) onward. On earlier architectures
@@ -591,6 +606,7 @@ function atomic_red_view_tko(
     memory_ordering_semantics,
     memory_scope,
     mode,
+    inbounds,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -601,6 +617,7 @@ function atomic_red_view_tko(
         NamedAttribute("memory_ordering_semantics", memory_ordering_semantics),
         NamedAttribute("memory_scope", memory_scope),
         NamedAttribute("mode", mode),
+        NamedAttribute("inbounds", inbounds),
     ]
     !isnothing(token) && push!(operands, token)
     push!(attributes, operandsegmentsizes([1, length(index), 1, Int(!isnothing(token))]))
@@ -651,8 +668,10 @@ end
 
 The :code:`break` operation is a terminator operation of a :ref:`op-cuda_tile.loop`.
 
-It may yield any number of :code:`\$operands` to the parent loop upon termination. The number of values yielded
-and the execution semantics of how they are yielded are determined by the parent loop.
+It may yield any number of :code:`\$operands` to the parent loop upon termination; their
+types must match the result types of the enclosing :ref:`op-cuda_tile.loop`. The number
+of values yielded and the execution semantics of how they are yielded are determined by
+the parent loop.
 
 The :code:`break` operation always returns control to the innermost enclosing loop operation,
 even when it is nested within other control constructs such as :code:`if` or additional loops.
@@ -699,6 +718,58 @@ function broadcast(source::Value; result::IR.Type, location=Location())
 
     return create_operation(
         "cuda_tile.broadcast",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`preview$call`
+
+The :code:`preview\$call` operation represents a SIMT interop call to an
+external function. When resolved, its callee must be an extern
+:code:`preview\$func` in the same symbol scope. The callee is encoded
+as a symbol reference attribute named :code:`callee`. An unresolved callee
+is permitted. Checks that require the declaration apply only when the
+symbol resolves.
+
+Both declarations and call sites use
+:code:`!cuda_tile.tile<...>`; declaration types may contain symbolic shapes
+or element types, while call-site tiles must be concrete. External calls may
+additionally carry :code:`!cuda_tile.token` operands and results
+anywhere in the call signature. These tokens are not passed to or returned
+by the external function. Instead, they are call-boundary ordering edges:
+token operands make the call depend on the represented effects, and token
+results are continuation tokens for effects modeled at the call boundary.
+Multiple tokens are allowed so independent ordering chains can cross the
+same external call without forcing the verifier to join them.
+"""
+function preview$call(
+    operands::Vector{Value};
+    results::Vector{IR.Type},
+    callee,
+    const_args,
+    arg_attrs=nothing,
+    res_attrs=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[results...,]
+    operands = Value[operands...,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("callee", callee), NamedAttribute("const_args", const_args)
+    ]
+    !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
+    !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
+
+    return create_operation(
+        "cuda_tile.preview$call",
         location;
         operands,
         owned_regions,
@@ -914,7 +985,9 @@ end
 
 The :code:`continue` operation represents a block terminator that returns control to
 a loop operation, such as :ref:`op-cuda_tile.for` and :ref:`op-cuda_tile.loop`. The operation
-may yield any number of :code:`\$operands` to the parent loop upon termination.
+may yield any number of :code:`\$operands` to the parent loop upon termination; their types
+must match the parent loop\'s loop-carried types — :code:`iter_values` types for
+:ref:`op-cuda_tile.loop`, result types for :ref:`op-cuda_tile.for`.
 
 The requirements and semantics of the :code:`continue` operation are defined by the parent loop
 operation, see the loop operation\'s description for particular semantics.
@@ -1061,9 +1134,6 @@ end
 
 The :code:`divi` operation computes the element-wise division of two tile values with integer element type.
 
-The default rounding is towards zero. The rounding mode can be set to `positive_inf` (\"ceiling division\"),
-or `negative_inf` (\"floor division\"), other values are illegal.
-
 The use of the rounding flag `negative_inf` with `unsigned` is not a valid combination.
 
 If the `unsigned` flag is provided, the operands are treated as unsigned integers, otherwise they are
@@ -1110,8 +1180,9 @@ end
 
 The :code:`entry` operation defines a tile kernel; a kernel is a function that can
 serve as the program entry point. It has a unique name per-module. A kernel can
-not return any value. It must be launched from the host side using :code:`cuLaunchKernel`
-or similar CUDA runtime API functions.
+not return any value, and all its arguments must be scalar (rank-0) tile types.
+It must be launched from the host side using :code:`cuLaunchKernel` or similar
+CUDA runtime API functions.
 
 Tile kernels require that the user specifies the 3-d grid dimensions at launch which
 defines the number of tile blocks (or kernel instances) that will execute the kernel
@@ -1122,6 +1193,7 @@ For detailed semantics of tile kernels see :ref:`sub_sec_tile_kernel`.
 function entry(;
     sym_name,
     function_type,
+    sym_visibility=nothing,
     arg_attrs=nothing,
     res_attrs=nothing,
     optimization_hints=nothing,
@@ -1135,6 +1207,8 @@ function entry(;
     attributes = NamedAttribute[
         NamedAttribute("sym_name", sym_name), NamedAttribute("function_type", function_type)
     ]
+    !isnothing(sym_visibility) &&
+        push!(attributes, NamedAttribute("sym_visibility", sym_visibility))
     !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
     !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
     !isnothing(optimization_hints) &&
@@ -1197,7 +1271,7 @@ end
 The :code:`exp` operation computes the element-wise exponential of the input
 floating-point tile. Default rounding mode is `full`.
 
-The :code:`full` rounding mode relies on the CUDA Math API. For more details please refer to
+The :code:`full` rounding mode relies on the CUDA Math API. For more details please refer to 
 the CUDA Programming Guide: https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/mathematical-functions.html#cuda-c-mathematical-standard-library-functions.
 Exponential functions provided by the CUDA Math API are supported for the float and double data types only,
 support for other data types is not guaranteed.
@@ -1256,6 +1330,120 @@ function exti(from::Value; to::IR.Type, signedness, location=Location())
 
     return create_operation(
         "cuda_tile.exti",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`preview$extern_impl`
+
+The :code:`preview\$extern_impl` operation associates a tile-level
+:code:`preview\$func extern` declaration with a native device function.
+Multiple SIMT implementations may back the same declaration.
+
+The implementation specifies:
+- Which extern function it implements (via symbol reference)
+- Optional constant parameters for this implementation
+- Optional constant arguments to instantiate the extern function\'s parameters
+- Optional named parameter list with types
+- Fragment types carrying memory spaces and layouts
+- Target architectures (arch)
+- An optional signed provider candidate score
+
+The implementation\'s `sym_name` names the native device function.
+Load tile libraries containing implementations with ``-l=<path>`` and
+``--preview=simt`` in tileiras.
+
+`synchronization` records the widest cooperative synchronization domain
+used by the implementation. It defaults to `none`. It is a separate
+legality contract from the fragment map\'s physical participant count and
+does not add an entry barrier. Concrete fragment maps must satisfy the
+participant-count constraint of the selected synchronization domain;
+symbolic counts are checked after concretization.
+
+The `config` dictionary is reserved and unsupported on extern
+implementations. It must be absent; verification rejects even an empty
+dictionary. Express declaration specialization through constant parameters
+and arguments, target restrictions through `arch`, and invocation
+requirements through fragment maps and `synchronization`.
+
+`provider_score` is an optional signed preference among implementations.
+A larger value indicates a stronger preference; absence means zero.
+It does not change the callable ABI or implementation compatibility
+requirements.
+
+The `implements` symbol reference may be unresolved. When it resolves,
+it must name an extern :code:`preview\$func` in the same symbol scope,
+and the implementation must satisfy that declaration\'s parameter and
+fragment compatibility requirements. Checks that require the declaration
+apply only when the symbol resolves.
+
+# Example
+
+.. code-block:: mlir
+
+  cuda_tile.preview\$extern_impl @my_simt_func_sm80
+    implements @my_simt_func
+
+  cuda_tile.preview\$extern_impl @my_simt_func_sm80
+    implements @my_simt_func(
+      %arg0: !cuda_tile.preview\$fragment<1xf32, local,
+        mem_layout = #cuda_tile.preview\$layout<(1):(1)>,
+        fragmap = #cuda_tile.preview\$layout<(128, 1, 1):(1, 0, 0)>> {
+          cuda_tile.preview\$access = #cuda_tile.preview\$access<inout>})
+"""
+function preview$extern_impl(;
+    sym_name,
+    sym_visibility=nothing,
+    implements,
+    const_params=nothing,
+    const_args=nothing,
+    function_type,
+    arg_attrs=nothing,
+    res_attrs=nothing,
+    scratch_smem=nothing,
+    config=nothing,
+    arch=nothing,
+    frontendABI=nothing,
+    synchronization=nothing,
+    provider_score=nothing,
+    body::Region,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[body,]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("sym_name", sym_name),
+        NamedAttribute("implements", implements),
+        NamedAttribute("function_type", function_type),
+    ]
+    !isnothing(sym_visibility) &&
+        push!(attributes, NamedAttribute("sym_visibility", sym_visibility))
+    !isnothing(const_params) &&
+        push!(attributes, NamedAttribute("const_params", const_params))
+    !isnothing(const_args) && push!(attributes, NamedAttribute("const_args", const_args))
+    !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
+    !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
+    !isnothing(scratch_smem) &&
+        push!(attributes, NamedAttribute("scratch_smem", scratch_smem))
+    !isnothing(config) && push!(attributes, NamedAttribute("config", config))
+    !isnothing(arch) && push!(attributes, NamedAttribute("arch", arch))
+    !isnothing(frontendABI) && push!(attributes, NamedAttribute("frontendABI", frontendABI))
+    !isnothing(synchronization) &&
+        push!(attributes, NamedAttribute("synchronization", synchronization))
+    !isnothing(provider_score) &&
+        push!(attributes, NamedAttribute("provider_score", provider_score))
+
+    return create_operation(
+        "cuda_tile.preview$extern_impl",
         location;
         operands,
         owned_regions,
@@ -1408,6 +1596,20 @@ are evaluated top-to-bottom; the first matching row applies:
    \":code:`f32` → :code:`tf32`\",                                    \"✓\", \"✓\", \"\",  \"\",  \"✓\"
    \"All other narrowing conversions\",                               \"✓\", \"✓\", \"\",  \"\",  \"\"
 
+A conversion is a **strict widening** when every value representable in
+the source type is exactly representable in the destination type, so the
+conversion is lossless regardless of rounding mode. For example,
+:code:`f16` → :code:`f32` is a strict widening: every :code:`f16` value
+has an exact :code:`f32` representation. By contrast,
+:code:`f16` → :code:`bf16` is **not** a widening because :code:`bf16`
+has fewer mantissa bits than :code:`f16` (7 vs. 10), so some
+:code:`f16` values cannot be represented exactly. Conversely,
+:code:`bf16` → :code:`f16` is **not** a widening because :code:`f16`
+has a smaller exponent range than :code:`bf16` (5-bit vs. 8-bit
+exponent), so some :code:`bf16` values overflow the :code:`f16`
+range. Such conversions appear in the \"All other narrowing
+conversions\" row.
+
 .. warning::
 
   Different floating-point types have different conversion behaviors for out-of-finite-range
@@ -1441,9 +1643,6 @@ The :code:`ftoi` operation converts a floating-point tile into an integer tile.
 
 In contrast to a :ref:`op-cuda_tile.bitcast` which is bits preserving, this preserves the numerical
 value of the tile, rounded towards zero to the nearest integer of the provided type.
-
-The :code:`rounding_mode` attribute specifies the rounding behavior for the operation.
-Only :code:`NEAREST_INT_TO_ZERO` rounding mode is supported.
 
 .. warning::
 
@@ -1623,6 +1822,56 @@ function for_(
 
     return create_operation(
         "cuda_tile.for",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`preview$func`
+
+The :code:`preview\$func` operation declares an external function at the
+SIMT interop boundary. It must carry the :code:`extern` attribute and must
+not have a body.
+
+The function signature uses :code:`!cuda_tile.tile<...>` ABI boundary
+types, which may contain symbolic shapes and element types. The declaration
+may include compile-time constant parameters and must have at least one
+input or result. Calls to the function use :code:`preview\$call`.
+"""
+function preview$func(;
+    sym_name,
+    is_extern=nothing,
+    function_type,
+    sym_visibility=nothing,
+    arg_attrs=nothing,
+    res_attrs=nothing,
+    const_params,
+    body::Region,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[body,]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("sym_name", sym_name),
+        NamedAttribute("function_type", function_type),
+        NamedAttribute("const_params", const_params),
+    ]
+    !isnothing(is_extern) && push!(attributes, NamedAttribute("is_extern", is_extern))
+    !isnothing(sym_visibility) &&
+        push!(attributes, NamedAttribute("sym_visibility", sym_visibility))
+    !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
+    !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
+
+    return create_operation(
+        "cuda_tile.preview$func",
         location;
         operands,
         owned_regions,
@@ -1974,7 +2223,9 @@ end
 
 The :code:`itof` operation converts an integer tile into a float tile.
 In contrast to :ref:`op-cuda_tile.bitcast`, this preserves the numerical value of the tile,
-rounded to the nearest floating-point number of the provided type.
+rounded to the nearest floating-point number of the provided type. Direct conversion to
+:code:`f8E8M0FNU` is not allowed; first convert to a wider floating-point type and then
+to :code:`f8E8M0FNU` via :ref:`op-cuda_tile.ftof`.
 
 .. warning::
 
@@ -2013,10 +2264,9 @@ and (3) an optional false branch :code:`elseRegion`.
 
 The :code:`if` operation may produce results by yielding values in each branch using :ref:`op-cuda_tile.yield`.
 
-If yielding value(s) the types of yielded values must match and the result
-result type of the :code:`if` operation will be the same as the yielded values.
-
-If yielding values the else branch is required and must also yield a value.
+If the :code:`if` operation has results, both branches must yield values whose types match
+the result types. If the :code:`if` operation has no results, both branches must yield
+nothing. When results are produced the :code:`else` branch is required.
 
 The values returned will be dependent on which branch is taken.
 
@@ -2167,9 +2417,9 @@ end
 """
 `join_tokens`
 
-The :code:`join_tokens` operation produces a fresh token which depends on all input tokens.
-Token-ordered operations which consume the new token will then be ordered with respect to all
-joined tokens.
+The :code:`join_tokens` operation produces a fresh token which depends on all input tokens
+(at least two are required). Token-ordered operations which consume the new token will then
+be ordered with respect to all joined tokens.
 """
 function join_tokens(
     tokens::Vector{Value}; result=nothing::Union{Nothing,IR.Type}, location=Location()
@@ -2208,6 +2458,9 @@ specified with the :code:`cuda_tile.assume` operation.
 The operation loads this data and returns it as the :code:`result` tile.
 When loading i1 values, each value is loaded from a full byte in memory.
 Any nonzero byte is canonicalized to 0x01, and zero bytes become 0x00.
+Direct pointer-tile loads do not support :code:`f4E2M1FN`. Use a tile view
+to load f4 memory. Alternatively, load its packed byte representation as
+:code:`i8` and convert it with :code:`cuda_tile.unpack`.
 
 Optionally, a :code:`mask` operand can be provided to control the gathering of
 elements. If present, only the elements specified by the :code:`mask` are loaded.
@@ -2217,9 +2470,13 @@ When :code:`mask` is present one :code:`paddingValue` can be optionally present 
 The :code:`paddingValue` must have the same shape of the :code:`source` tile. If
 it is not present, the value of masked elements are undefined.
   
-Token-ordered operations are not constrained by program order.
-The compiler may reorder them (i.e. place them earlier or
-later in program order) unless further constrained by tokens.
+When :code:`memory_ordering_semantics` is :code:`weak`, :code:`memory_scope`
+must be omitted; when it is :code:`relaxed` or :code:`acquire`, :code:`memory_scope`
+is required.
+
+Token-ordered operations are not constrained by program order. The compiler may
+reorder them (i.e. place them earlier or later in program order) unless further
+constrained by tokens.
 """
 function load_ptr_tko(
     source::Value,
@@ -2295,12 +2552,16 @@ index dimension; it is interpreted element-wise:
   guarantee is undefined behavior.
 - element :code:`i = false` carries no such guarantee: the i-th tile coordinate
   is conservatively treated as potentially out-of-bounds and handled
-  according to the semantics of :ref:`type-partition_view`.
+  according to the semantics of the concrete view type
+  (see for example :ref:`type-partition_view`).
 
 In textual MLIR the :code:`inbounds = [...]` clause may be omitted, in
 which case the parser synthesizes an all-:code:`false` vector sized to
 the index rank (every dimension conservatively treated as potentially
 out-of-bounds).
+
+When :code:`memory_ordering_semantics` is :code:`weak`, :code:`memory_scope` must be
+omitted; when it is :code:`relaxed` or :code:`acquire`, :code:`memory_scope` is required.
 
 .. note::
 
@@ -2308,6 +2569,14 @@ out-of-bounds).
   element type byte size (rounded to the next full byte for
   sub-byte types). Even stronger alignment guarantees can be
   specified with the :code:`cuda_tile.assume` operation.
+
+  An :code:`f4E2M1FN` access additionally requires the underlying tensor
+  view to identify exactly one statically encoded unit-stride packing
+  dimension. The tensor view and concrete tile-view types specify
+  additional evenness preconditions on extents, strides, and origins. Some
+  may be runtime values, while tile extents and traversal strides are
+  static type attributes. If an access executes with any applicable value
+  odd, behavior is undefined.
 """
 function load_view_tko(
     view::Value,
@@ -2473,9 +2742,11 @@ The :code:`make_gather_scatter_view` operation creates a :tileirty:`gather_scatt
 :tileirty:`tensor_view`. For more details about gather/scatter views see :ref:`type-gather_scatter_view`.
 
 The operation uses the type constraints of the input tensor view and the annotated return type
-to perform the gathering/scattering. The tensor view\'s type contains its physical layout in the form
-of shapes and strides and the gather/scatter view contains the logical size of a single tile and
-the dimension along which to gather/scatter.
+to perform the gathering/scattering, so the type of the :code:`tensor_view` operand must
+exactly match the :code:`tensor_view<...>` embedded in the result
+:code:`gather_scatter_view<...>`. The tensor view\'s type contains its physical layout in the
+form of shapes and strides and the gather/scatter view contains the logical size of a single
+tile and the dimension along which to gather/scatter.
 
 The resulting gather/scatter view can be loaded from using :ref:`op-cuda_tile.load_view_tko` and
 stored to using :ref:`op-cuda_tile.store_view_tko`.
@@ -2509,8 +2780,10 @@ The :code:`make_partition_view` operation creates a :tileirty:`partition_view` f
 :tileirty:`tensor_view`. For more details about partition views see :ref:`type-partition_view`.
 
 The operation uses the type constraints of the input tensor view and the annotated return type
-to perform the partitioning. The tensor view\'s type contains its physical layout in the form
-of shapes and strides and the partition view contains the logical size of a single tile.
+to perform the partitioning, so the type of the :code:`tensor_view` operand must exactly match
+the :code:`tensor_view<...>` embedded in the result :code:`partition_view<...>`. The tensor
+view\'s type contains its physical layout in the form of shapes and strides and the partition
+view contains the logical size of a single tile.
 
 The resulting partition view can be loaded from using :ref:`op-cuda_tile.load_view_tko` and
 stored to using :ref:`op-cuda_tile.store_view_tko`.
@@ -2544,9 +2817,10 @@ The :code:`make_strided_view` operation creates a :tileirty:`strided_view` from 
 :tileirty:`tensor_view`. For more details about strided views see :ref:`type-strided_view`.
 
 The operation uses the type constraints of the input tensor view and the annotated return type
-to perform the tiling. The tensor view\'s type contains its physical layout in the form
-of shapes and strides and the strided view contains the logical size of a single tile,
-along with the traversal striding factors.
+to perform the tiling, so the type of the :code:`tensor_view` operand must exactly match the
+:code:`tensor_view<...>` embedded in the result :code:`strided_view<...>`. The tensor view\'s
+type contains its physical layout in the form of shapes and strides and the strided view
+contains the logical size of a single tile, along with the traversal striding factors.
 
 The resulting strided view can be loaded from using :ref:`op-cuda_tile.load_view_tko` and
 stored to using :ref:`op-cuda_tile.store_view_tko`.
@@ -2577,14 +2851,19 @@ end
 `make_tensor_view`
 
 The :code:`make_tensor_view` operation constructs a :code:`tensor_view` from a global
-memory pointer, a dynamic shape and dynamic strides. See :ref:`type-tensor_view` for more details.
+memory pointer, a dynamic shape and dynamic strides. See :ref:`type-tensor_view` for more
+details. The :code:`base` pointer\'s pointee type must equal the element type of the
+resulting :code:`tensor_view`. If :code:`base` carries a :code:`ptr_attr`, the
+:code:`tensor_view` must carry the same :code:`ptr_attr`; if :code:`base` does not
+carry one, the :code:`tensor_view` must not carry one either.
 
-The constructor supports taking dynamic arrays for shapes and strides as part of the constructor
-enabling workloads to take global memory tensors of dynamic shape and strides. If these arguments
-are static they will be statically reflected in the type of the resulting :code:`tensor_view`, if
-they are dynamic they will appear as :code:`?` in the type. See below for concrete examples.
-
-The :code:`dynamicShape` and :code:`dynamicStrides` operands are interpreted as unsigned integers.
+The constructor supports taking dynamic arrays for shapes and strides, enabling workloads
+to operate on global memory tensors of dynamic shape and strides. Static values are
+reflected directly in the resulting :code:`tensor_view` type; dynamic values appear as
+:code:`?` and the corresponding :code:`dynamicShape` / :code:`dynamicStrides` operands
+must be supplied (one per :code:`?`). All dynamic shape and stride operands must be
+scalar tiles of the same integer element type, interpreted as unsigned integers. See
+below for concrete examples.
 """
 function make_tensor_view(
     base::Value,
@@ -2654,10 +2933,6 @@ only if both elements are :code:`NaN`; otherwise, it returns the non-:code:`NaN`
 
 If neither element is :code:`NaN`, :code:`maxf` will return the greater of the
 inputs. :code:`+0.0` is considered greater than :code:`-0.0`.
-
-If the :code:`flush_to_zero` modifier is specified, denormal numbers are
-flushed to sign-preserving zero. The :code:`flush_to_zero` modifier applies
-only to the f32 data type.
 
 .. math::
   \\text{maxi}(x, y)_i = \\begin{cases}
@@ -2784,10 +3059,6 @@ only if both elements are :code:`NaN`; otherwise, it returns the non-:code:`NaN`
 If neither element is :code:`NaN`, :code:`minf` will return the lowest of the
 inputs. :code:`-0.0` is considered less than :code:`+0.0`.
 
-If the :code:`flush_to_zero` modifier is specified, denormal numbers are
-flushed to sign-preserving zero. The :code:`flush_to_zero` modifier applies
-only to the f32 data type.
-
 .. math::
   \\text{minf}(x, y)_i = \\begin{cases}
     x_i & \\text{if } x_i \\leq y_i \\\\
@@ -2882,6 +3153,17 @@ Shapes must be a valid matrix multiplication configuration. Unbatched (2D)
 MMA expects the operands :code:`lhs`, :code:`rhs`, and :code:`acc` to have shapes :code:`M x K`,
 :code:`K x N`, and :code:`M x N` (respectively). Batched (3D) MMA expects the operands
 to have shapes :code:`B x M x K`, :code:`B x K x N`, and :code:`B x M x N` (respectively).
+
+To perform a matrix multiply without accumulation, pass a constant zero tile for the
+:code:`acc` parameter.
+
+.. warning::
+
+  :code:`mmaf` results are not bit-identical across tile sizes, target architectures,
+  compiler/driver versions, or ``fast_acc`` settings. See
+  :ref:`MMA Numerical Stability <subsection-mma-numerical-stability>`
+  for the reasons MMA results are not stable and what programs can and
+  cannot assume.
 """
 function mmaf(
     lhs::Value,
@@ -2927,7 +3209,14 @@ and then performing the standard MMA on the scaled tiles.
 .. math::
   \\text{mmaf_scaled}(lhs, rhs, acc, lhs\\_scale, rhs\\_scale)_{i,j} = \\sum_{k=0}^{K-1} (lhs_{i,k}*lhs\\_scale_{i,k/V}) \\times (rhs_{k,j}*rhs\\_scale_{k/V,j}) + acc_{i,j}
 
-where :code:`V` is the scale factor vector (or block) size.
+where :math:`V` is the scale-factor vector (or block) size, derived as the K
+dimension of :code:`lhs`/:code:`rhs` divided by the K dimension of
+:code:`lhs_scale`/:code:`rhs_scale`. The K dimensions must therefore divide
+evenly, and :math:`V` is constrained by the input/scale element types:
+
+- :code:`f8E4M3FN` and :code:`f8E5M2` inputs: :math:`V` must be 32.
+- :code:`f4E2M1FN` inputs with :code:`f8E4M3FN` scales: :math:`V` must be 16.
+- :code:`f4E2M1FN` inputs with :code:`f8E8M0FNU` scales: :math:`V` must be 16 or 32.
 
 The same rank and shape constraints apply as for :ref:`op-cuda_tile.mmaf`. The operand types must be a supported combination
 (see :ref:`table-cuda_tile.mmaf_scaled-0`). :code:`lhs` and :code:`rhs` must be of the same element type.
@@ -2935,9 +3224,23 @@ The same rank and shape constraints apply as for :ref:`op-cuda_tile.mmaf`. The o
 
 .. note::
     Not every valid operand and vector size configuration is efficiently supported on all architectures.
+    Only scale-vector sizes of 16 and 32 are accepted; for :code:`f8E4M3FN` scales, only vector
+    size 16 (the NVFP4 configuration) is supported.
 
 .. note::
     When using :code:`f8E4M3FN` as the scale type, values must be non-negative. Negative scale values may produce undefined values.
+
+.. warning::
+
+    :code:`mmaf_scaled` is not supported on Hopper (sm_90). It is available on Blackwell (sm_100, sm_120) and later.
+
+.. warning::
+
+    :code:`mmaf_scaled` results are not bit-identical across tile sizes, target
+    architectures, or compiler/driver versions. See
+    :ref:`MMA Numerical Stability <subsection-mma-numerical-stability>`
+    for the reasons MMA results are not stable and what programs can and
+    cannot assume.
 """
 function mmaf_scaled(
     lhs::Value,
@@ -3060,11 +3363,6 @@ end
 The :code:`mulf` operation computes the element-wise product between the two input tiles with
 with floating-point element types.
 
-If the :code:`flush_to_zero` modifier is specified, denormal numbers are flushed to positive zero.
-
-If the :code:`rounding` modifier is specified, the particular rounding mode will be applied to each
-element of the result.
-
 .. math::
   \\text{mulf}(x, y)_i = x_i \\times y_i
   
@@ -3178,6 +3476,305 @@ function mulhii(
 end
 
 """
+`multimem_load_reduce_view_tko`
+
+The :code:`multimem_load_reduce_view_tko` operation loads from the tile view :code:`\$view` and
+returns a single reduced result tile using a multimem load-reduce access path.
+
+.. note::
+
+  The underlying pointer for :code:`\$view` must be a multicast global pointer (for
+  example :code:`tile<ptr<T, #cuda_tile.ptr_attr<multicast>>>`),
+  and the view must be built over that multicast-backed storage. A plain unicast
+  global pointer is invalid.
+
+  This operation requires the target GPUs to be connected through an
+  NVLink SHARP-supported NVSwitch.
+
+  Currently, compiler support is limited to the following:
+
+  * :code:`sm_100`, :code:`sm_103`, and :code:`sm_107` targets.
+  * :ref:`type-partition_view` operands.
+
+The :code:`\$index` operands address :code:`\$view` in view index space. There must be
+one index per index dimension of the view, the number of indices must match the
+view\'s index rank, and together they select which
+tile (or indexed region, depending on the view type) is loaded and reduced. The
+indices are interpreted as unsigned integers. Which indices are valid and how
+out-of-bounds accesses are handled are defined by the concrete view type of
+:code:`\$view`.
+
+The :code:`\$memory_ordering_semantics` attribute specifies the concurrency
+assumption between memory accesses in different threads. When it is :code:`weak`,
+the compiler may assume there are no concurrent accesses to the loaded locations and
+:code:`\$memory_scope` must not be specified. When it is :code:`relaxed` or
+:code:`acquire`, :code:`\$memory_scope` must be specified.
+
+The :code:`\$reduction` attribute selects the reduction combiner.
+Supported element types per reduction kind:
+
+.. note::
+
+  ================  =====  =====  =====  ======  =====  =====
+  Reduction         i32    i64    f16    bf16    f32    f64
+  ================  =====  =====  =====  ======  =====  =====
+  ADD               ✓      ✓      ✓      ✓       ✓      ✓
+  MIN (signed)      ✓      ✓      ✓      ✓       —      —
+  MAX (signed)      ✓      ✓      ✓      ✓       —      —
+  UMIN (unsigned)   ✓      ✓      —      —       —      —
+  UMAX (unsigned)   ✓      ✓      —      —       —      —
+  AND / OR / XOR    ✓      ✓      —      —       —      —
+  ================  =====  =====  =====  ======  =====  =====
+
+The :code:`inbounds` attribute lets the user (or a preceding
+analysis) declare that selected tile-coordinate dimensions are statically
+known to address only valid memory. When set, it must contain one bool per
+index dimension; element :code:`i = true` is a guarantee that for every
+program instance the i-th tile coordinate, combined with the tile size and
+the view\'s traversal stride, stays inside the parent tensor along that
+dimension. Violating that guarantee is undefined behavior. When absent, all
+dimensions are conservatively treated as potentially out-of-bounds and
+handled according to the semantics of the concrete view type
+(see for example :ref:`type-partition_view`).
+"""
+function multimem_load_reduce_view_tko(
+    view::Value,
+    index::Vector{Value},
+    token=nothing::Union{Nothing,Value};
+    reduced_values::IR.Type,
+    result_token::IR.Type,
+    memory_ordering_semantics,
+    memory_scope=nothing,
+    reduction=nothing,
+    inbounds,
+    location=Location(),
+)
+    op_ty_results = IR.Type[reduced_values, result_token]
+    operands = Value[view, index...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("memory_ordering_semantics", memory_ordering_semantics),
+        NamedAttribute("inbounds", inbounds),
+    ]
+    !isnothing(token) && push!(operands, token)
+    push!(attributes, operandsegmentsizes([1, length(index), Int(!isnothing(token))]))
+    !isnothing(memory_scope) &&
+        push!(attributes, NamedAttribute("memory_scope", memory_scope))
+    !isnothing(reduction) && push!(attributes, NamedAttribute("reduction", reduction))
+
+    return create_operation(
+        "cuda_tile.multimem_load_reduce_view_tko",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`multimem_reduce_view_tko`
+
+The :code:`multimem_reduce_view_tko` operation performs an atomic read-modify-write at
+the memory locations reached through the tile view :code:`\$view`. Each element of
+:code:`\$tile` is combined with the existing memory at the matching location using
+:code:`\$reduction`; the update is atomic with respect to other accesses to those same
+locations.
+
+.. note::
+
+  The underlying pointer for :code:`\$view` must be a multicast global pointer (for
+  example :code:`tile<ptr<T, #cuda_tile.ptr_attr<multicast>>>`),
+  and the view must be built over that multicast-backed storage. A plain unicast
+  global pointer is invalid.
+
+  This operation requires the target GPUs to be connected through an
+  NVLink SHARP-supported NVSwitch.
+
+  Currently, compiler support is limited to the following:
+
+  * :code:`sm_100`, :code:`sm_103`, and :code:`sm_107` targets.
+  * :ref:`type-partition_view` operands.
+
+The :code:`\$index` operands address :code:`\$view` in view index space. There must be
+one index per index dimension of the view, the number of indices must match the
+view\'s index rank, and together they select the destination tile (or region) that is
+updated together with :code:`\$tile`. The indices are interpreted as unsigned
+integers. Which indices are valid and how out-of-bounds
+accesses are handled are defined by the concrete view type of :code:`\$view`.
+
+The :code:`\$memory_ordering_semantics` attribute must be :code:`relaxed` or
+:code:`release`, and :code:`\$memory_scope` is always required.
+
+This op has no :code:`weak` ordering: it is an atomic multimem reduction, which is
+only defined together with an explicit memory scope (:code:`tl_blk`,
+:code:`device`, or :code:`sys`) alongside :code:`relaxed` or :code:`release`.
+
+The :code:`\$reduction` attribute selects the reduction combiner used in the atomic
+update. Supported element types per reduction kind:
+
+.. note::
+
+  ================  =====  =====  =====  ======  =====  =====
+  Reduction         i32    i64    f16    bf16    f32    f64
+  ================  =====  =====  =====  ======  =====  =====
+  ADD               ✓      ✓      ✓      ✓       ✓      ✓
+  MIN (signed)      ✓      ✓      —      —       —      —
+  MAX (signed)      ✓      ✓      —      —       —      —
+  UMIN (unsigned)   ✓      ✓      —      —       —      —
+  UMAX (unsigned)   ✓      ✓      —      —       —      —
+  AND / OR / XOR    ✓      ✓      —      —       —      —
+  ================  =====  =====  =====  ======  =====  =====
+
+The :code:`inbounds` attribute lets the user (or a preceding
+analysis) declare that selected tile-coordinate dimensions are statically
+known to address only valid memory. When set, it must contain one bool per
+index dimension; element :code:`i = true` is a guarantee that for every
+program instance the i-th tile coordinate, combined with the tile size and
+the view\'s traversal stride, stays inside the parent tensor along that
+dimension. Violating that guarantee is undefined behavior. When absent, all
+dimensions are conservatively treated as potentially out-of-bounds and
+handled according to the semantics of the concrete view type
+(see for example :ref:`type-partition_view`).
+"""
+function multimem_reduce_view_tko(
+    view::Value,
+    tile::Value,
+    index::Vector{Value},
+    token=nothing::Union{Nothing,Value};
+    result_token=nothing::Union{Nothing,IR.Type},
+    memory_ordering_semantics,
+    memory_scope,
+    reduction=nothing,
+    inbounds,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[view, tile, index...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("memory_ordering_semantics", memory_ordering_semantics),
+        NamedAttribute("memory_scope", memory_scope),
+        NamedAttribute("inbounds", inbounds),
+    ]
+    !isnothing(token) && push!(operands, token)
+    push!(attributes, operandsegmentsizes([1, 1, length(index), Int(!isnothing(token))]))
+    !isnothing(result_token) && push!(op_ty_results, result_token)
+    !isnothing(reduction) && push!(attributes, NamedAttribute("reduction", reduction))
+
+    return create_operation(
+        "cuda_tile.multimem_reduce_view_tko",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`multimem_store_view_tko`
+
+The :code:`multimem_store_view_tko` operation writes the tile :code:`\$tile` to the memory
+locations reached through the tile view :code:`\$view` using a multimem store path.
+It is intended for multicast global paths where the same logical store is visible to
+multiple participants while still using a single view-shaped store in |cuda_tile|.
+
+.. note::
+
+  The underlying pointer for :code:`\$view` must be a multicast global pointer (for
+  example :code:`tile<ptr<T, #cuda_tile.ptr_attr<multicast>>>`),
+  and the view must be built over that multicast-backed storage. A plain unicast
+  global pointer is invalid.
+
+  This operation requires the target GPUs to be connected through an
+  NVLink SHARP-supported NVSwitch.
+
+  Currently, compiler support is limited to the following:
+
+  * :code:`sm_100`, :code:`sm_103`, and :code:`sm_107` targets.
+  * :ref:`type-partition_view` operands.
+
+The :code:`\$index` operands address :code:`\$view` in view index space. There must be
+one index per index dimension of the view, the number of indices must match the
+view\'s index rank, and together they select the destination tile (or region) that
+receives :code:`\$tile`. The indices are interpreted as unsigned integers. Which
+indices are valid and how out-of-bounds accesses are
+handled are defined by the concrete view type of :code:`\$view`.
+
+The :code:`\$memory_ordering_semantics` attribute follows the same weak, relaxed, and
+release split as other token-ordered stores: when :code:`weak`, :code:`\$memory_scope`
+must not be specified; when :code:`relaxed` or :code:`release`,
+:code:`\$memory_scope` must be specified.
+
+The values in :code:`\$tile` replace the contents at the destination selected by
+:code:`\$index` on the multimem store path.
+
+Supported element types:
+
+.. note::
+
+  ================  =====  =====  =====  ======  =====  =====
+  Operation         i32    i64    f16    bf16    f32    f64
+  ================  =====  =====  =====  ======  =====  =====
+  multimem_store    ✓      ✓      ✓      ✓       ✓      ✓
+  ================  =====  =====  =====  ======  =====  =====
+
+The :code:`inbounds` attribute lets the user (or a preceding
+analysis) declare that selected tile-coordinate dimensions are statically
+known to address only valid memory. When set, it must contain one bool per
+index dimension; element :code:`i = true` is a guarantee that for every
+program instance the i-th tile coordinate, combined with the tile size and
+the view\'s traversal stride, stays inside the parent tensor along that
+dimension. Violating that guarantee is undefined behavior. When absent, all
+dimensions are conservatively treated as potentially out-of-bounds and
+handled according to the semantics of the concrete view type
+(see for example :ref:`type-partition_view`).
+"""
+function multimem_store_view_tko(
+    view::Value,
+    tile::Value,
+    index::Vector{Value},
+    token=nothing::Union{Nothing,Value};
+    result_token=nothing::Union{Nothing,IR.Type},
+    memory_ordering_semantics,
+    memory_scope=nothing,
+    inbounds,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[view, tile, index...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("memory_ordering_semantics", memory_ordering_semantics),
+        NamedAttribute("inbounds", inbounds),
+    ]
+    !isnothing(token) && push!(operands, token)
+    push!(attributes, operandsegmentsizes([1, 1, length(index), Int(!isnothing(token))]))
+    !isnothing(result_token) && push!(op_ty_results, result_token)
+    !isnothing(memory_scope) &&
+        push!(attributes, NamedAttribute("memory_scope", memory_scope))
+
+    return create_operation(
+        "cuda_tile.multimem_store_view_tko",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `negf`
 
 :code:`negf` is an element-wise operation that negates the sign of :code:`source`.
@@ -3185,7 +3782,7 @@ end
 .. math::
   \\text{negf}(x)_i = -x_i
   
-:suffix: Element-wise floating-point arithmetic operations are performed by the target architecture\'s native floating-point instructions. If the :code:`rounding` modifier is specified, the particular rounding mode will be applied to each element of the result. See :ref:`op-group-floating-point` for more details.
+:suffix: Element-wise floating-point arithmetic operations are performed by the target architecture\'s native floating-point instructions. See :ref:`op-group-floating-point` for more details.
 """
 function negf(source::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
     op_ty_results = IR.Type[]
@@ -3211,7 +3808,8 @@ end
 `negi`
 
 The :code:`negi` operation computes the element-wise negation of the input integer tile.
-The input and output tiles are always interpreted as signed integers.
+The input and output tiles are always interpreted as signed integers; the :code:`overflow`
+flag :code:`no_unsigned_wrap` is therefore rejected.
 
 .. math::
   \\text{negi}(x_i) = -x_i
@@ -3249,19 +3847,24 @@ end
 
 :code:`offset` advances a tile of pointers. It takes :code:`ptr` as base
 and :code:`offset` as increment, and performs element-wise addition of
-:code:`ptr` by :code:`offset`:
+:code:`ptr` by :code:`offset`, measured in pointee elements:
 
 .. math::
-  \\text{offset}(\\text{ptr}, \\text{offset})_i = \\text{ptr}_i + \\text{offset}_i \\times \\text{bitwidth}
+  \\text{offset}(\\text{ptr}, \\text{offset})_i = \\text{ptr}_i + \\text{offset}_i
 
 .. code-block:: mlir
 
-    result[i,j] = ptr[i,j] + offset[i,j] * bitwidth
+    result[i,j] = ptr[i,j] + offset[i,j] elements
 
 :code:`ptr` is interpreted as an unsigned integer. :code:`offset` is
-interpreted as a signed integer. :code:`bitwidth` is the storage bitwidth
-of the pointee type. The multiplication must not overflow (wrap-around) in
-a signed sense. The addition must not overflow (wrap-around) in an unsigned
+interpreted as a signed integer. For byte-addressable pointee types, the
+physical byte displacement is :code:`offset` multiplied by the pointee\'s
+storage size in bytes. For :code:`f4E2M1FN`, :code:`offset` must be even and
+the byte displacement is :code:`offset / 2`; executing this operation with
+an odd f4 element offset is undefined behavior.
+
+The displacement calculation must not overflow (wrap around) in a signed
+sense. The pointer addition must not overflow (wrap around) in an unsigned
 sense. In case of an overflow, the result is undefined.
 """
 function offset(
@@ -3353,8 +3956,10 @@ end
 """
 `permute`
 
-Permute the dimensions of the input tile :code:`source` according to the :code:`permutation` array.
-The :code:`permutation` array is a list of integers that specify the new order of the dimensions.
+Permute the dimensions of the input tile :code:`source` according to the
+:code:`permutation` array. The :code:`source` must have rank at least 2, and
+:code:`permutation` must list each dimension index in :math:`[0, \\text{rank})`
+exactly once.
 
 For example, if the input tile has shape :code:`[2, 4, 8]`, and the permutation is :code:`[2, 0, 1]`,
 the output tile will have shape :code:`[8, 2, 4]`.
@@ -3519,16 +4124,16 @@ function in the :code:`body`. (For example, if the reduction function performs :
 the identity is :code:`+inf`, while if the reduction function performs a :code:`sum`,
 the identity is :code:`0`.)
 
-The :code:`body` region represents the associative and commutative operation. The region must
-contain |cuda_tile| operations with 0-rank tile types. The body must accept :code:`2N`
-arguments, where :code:`N` is the number of input tiles. Region
-arguments are bound in operand order as
+The :code:`body` region represents the associative and commutative operation. The
+region\'s block arguments must be scalar (rank-0) tiles whose element types match the
+corresponding input tiles. The body must accept :code:`2N` arguments, where :code:`N`
+is the number of input tiles. Region arguments are bound in operand order as
 :code:`[op_0_lhs, op_0_rhs, op_1_lhs, op_1_rhs, ...]`, so each pair
-:code:`(op_i_lhs, op_i_rhs)` corresponds to the :code:`i`-th input tile. Because the operation
-is associative and commutative, either argument may be an input element of the corresponding
-tile, the identity value for that tile, or a partial reduction result over a contiguous range
-of indices along the specified :code:`dim`. The body should yield the combined value for each
-input pair.
+:code:`(op_i_lhs, op_i_rhs)` corresponds to the :code:`i`-th input tile. Because the
+operation is associative and commutative, either argument may be an input element of
+the corresponding tile, the identity value for that tile, or a partial reduction
+result over a subset of indices along the specified :code:`dim`. The body
+should yield the combined value for each input pair.
 
 .. note::
 
@@ -3575,11 +4180,16 @@ truncated division (rounding towards zero).
 The result has the same sign as the dividend (:code:`lhs`) and its magnitude is
 less than the magnitude of divisor (:code:`rhs`).
 
+.. note::
+  \"Remainder\" and \"modulus\" are used inconsistently across different languages.
+  Tile IR\'s :code:`remf` matches the semantics of LLVM\'s :code:`frem`
+  and C\'s :code:`fmodf`, which does *not* match C :code:`remainderf`.
+
 **Special cases:**
 
-- If :code:`y` is zero, returns :code:`NaN`
-- If :code:`x` is infinite and :code:`y` is finite, returns :code:`NaN`
+- If :code:`x` is :code:`+0` or :code:`-0` and :code:`y` is nonzero, returns :code:`x`
 - If :code:`x` is finite and :code:`y` is infinite, returns :code:`x`
+- If :code:`x` is infinite or :code:`y` is zero, returns :code:`NaN`
 - If either argument is :code:`NaN`, returns :code:`NaN`
   
 :suffix: Element-wise floating-point arithmetic operations are performed by the target architecture\'s native floating-point instructions. If the :code:`rounding` modifier is specified, the particular rounding mode will be applied to each element of the result. See :ref:`op-group-floating-point` for more details.
@@ -3724,9 +4334,6 @@ end
 The :code:`rsqrt` operation computes the element-wise reciprocal square root
 of the input floating-point tile.
 
-This operation supports: :code:`flush_to_zero`: if set by the user,
-will flush subnormal inputs and results to sign-preserving zero.
-
 .. math::
 
   \\text{rsqrt}(x)_i = \\frac{1}{\\sqrt{x_i}}
@@ -3806,10 +4413,11 @@ tile; the identity at position :code:`i` binds with the operand tile at the same
 position. The correct identity is a property of the scan function in the :code:`body`
 (e.g., :code:`sum` uses 0, :code:`prod` uses 1, :code:`min` uses +inf, :code:`max` uses -inf).
 
-The :code:`body` region represents the associative and commutative operation. The region must
-contain |cuda_tile| operations with 0-rank tile types. The body must accept :code:`2N`
-arguments, where :code:`N` is the number of input tiles. Region arguments are bound in
-operand order as :code:`[op_0_lhs, op_0_rhs, op_1_lhs, op_1_rhs, ...]`, so each pair
+The :code:`body` region represents the associative and commutative operation. The
+region\'s block arguments must be scalar (rank-0) tiles whose element types match the
+corresponding input tiles. The body must accept :code:`2N` arguments, where :code:`N`
+is the number of input tiles. Region arguments are bound in operand order as
+:code:`[op_0_lhs, op_0_rhs, op_1_lhs, op_1_rhs, ...]`, so each pair
 :code:`(op_i_lhs, op_i_rhs)` corresponds to the :code:`i`-th input tile. Because the
 operation is associative and commutative, either argument may be an input element of
 the corresponding tile, the identity value for that tile, or a partial scan result
@@ -3872,8 +4480,9 @@ values in the condition tile.
   \\end{cases}
 
 All tiles must have the same shape. The tiles :code:`val_if_true`,
-:code:`val_if_false`, and the result must have the same element type. The :code:`cond`
-tile must be a tile of :code:`i1` values.
+:code:`val_if_false`, and the result must have the same element type;
+sub-byte element types are not supported. The :code:`cond` tile must be a
+tile of :code:`i1` values.
 """
 function select(
     cond::Value,
@@ -4098,11 +4707,18 @@ operation.
 
 When storing i1 values, each value occupies a full byte in memory. Any
 nonzero byte is canonicalized to 0x01, and zero bytes become 0x00.
+Direct pointer-tile stores do not support :code:`f4E2M1FN`. Use a tile view
+to store f4 memory. Alternatively, convert the f4 values with
+:code:`cuda_tile.pack` and store the resulting :code:`i8` bytes.
 
 Additionally, the operation supports an optional :code:`mask` operand, which allows
 selective scattering of elements. If provided, only the elements specified by
 the :code:`mask` are stored. The shape of the :code:`mask` must align with the shape of
 the :code:`value` tile.
+  
+When :code:`memory_ordering_semantics` is :code:`weak`,
+:code:`memory_scope` must be omitted; when it is :code:`relaxed` or :code:`release`,
+:code:`memory_scope` is required.
 """
 function store_ptr_tko(
     destination::Value,
@@ -4179,12 +4795,16 @@ index dimension; it is interpreted element-wise:
   guarantee is undefined behavior.
 - element :code:`i = false` carries no such guarantee: the i-th tile coordinate
   is conservatively treated as potentially out-of-bounds and handled
-  according to the semantics of :ref:`type-partition_view`.
+  according to the semantics of the concrete view type
+  (see for example :ref:`type-partition_view`).
 
 In textual MLIR the :code:`inbounds = [...]` clause may be omitted, in
 which case the parser synthesizes an all-:code:`false` vector sized to
 the index rank (every dimension conservatively treated as potentially
 out-of-bounds).
+
+When :code:`memory_ordering_semantics` is :code:`weak`, :code:`memory_scope` must be
+omitted; when it is :code:`relaxed` or :code:`release`, :code:`memory_scope` is required.
 
 .. note::
 
@@ -4192,6 +4812,14 @@ out-of-bounds).
   element type byte size (rounded to the next full byte for
   sub-byte types). Even stronger alignment guarantees can be
   specified with the :code:`cuda_tile.assume` operation.
+
+  An :code:`f4E2M1FN` access additionally requires the underlying tensor
+  view to identify exactly one statically encoded unit-stride packing
+  dimension. The tensor view and concrete tile-view types specify
+  additional evenness preconditions on extents, strides, and origins. Some
+  may be runtime values, while tile extents and traversal strides are
+  static type attributes. If an access executes with any applicable value
+  odd, behavior is undefined.
 """
 function store_view_tko(
     tile::Value,

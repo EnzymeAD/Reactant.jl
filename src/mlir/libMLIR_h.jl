@@ -14308,6 +14308,28 @@ function mlirRemarkGetId(remark)
 end
 
 """
+    mlirRemarkGetNumRelatedRemarks(remark)
+
+Returns the number of related remark IDs.
+"""
+function mlirRemarkGetNumRelatedRemarks(remark)
+    @ccall Reactant_jll.libReactantExtra.mlirRemarkGetNumRelatedRemarks(
+        remark::MlirRemark
+    )::Cptrdiff_t
+end
+
+"""
+    mlirRemarkGetRelatedRemarkId(remark, pos)
+
+Returns the `pos`-th related remark ID.
+"""
+function mlirRemarkGetRelatedRemarkId(remark, pos)
+    @ccall Reactant_jll.libReactantExtra.mlirRemarkGetRelatedRemarkId(
+        remark::MlirRemark, pos::Cptrdiff_t
+    )::UInt64
+end
+
+"""
     mlirRemarkGetNumArgs(remark)
 
 Returns the number of key/value arguments attached to the remark.
@@ -16835,15 +16857,6 @@ function enzymeActivityAttrGet(ctx, activity)
 end
 
 """
-    enzymeRegisterPasses()
-
-Register all Enzyme MLIR passes with the global registry.
-"""
-function enzymeRegisterPasses()
-    @ccall Reactant_jll.libReactantExtra.enzymeRegisterPasses()::Cvoid
-end
-
-"""
     enzymeRegisterDialectExtensions(registry)
 
 Register Enzyme's external model AD implementations for the core MLIR dialects (arith, func, scf, ...) into the given DialectRegistry. Must be called before appending the registry to an MLIRContext so that the Differentiate pass knows how to lower ops in those dialects.
@@ -16855,15 +16868,6 @@ function enzymeRegisterDialectExtensions(registry)
 end
 
 """
-    enzymeCreateDifferentiatePass()
-
-Create the core differentiation pass (`--enzyme`).
-"""
-function enzymeCreateDifferentiatePass()
-    @ccall Reactant_jll.libReactantExtra.enzymeCreateDifferentiatePass()::MlirPass
-end
-
-"""
     enzymeCreateDifferentiatePassWithOptions(postpasses, verifyPostPasses)
 
 Create the core differentiation pass with options. postpasses: semicolon-separated list of passes to run after differentiation (may be NULL or empty). verifyPostPasses: run the verifier after each post-pass.
@@ -16872,42 +16876,6 @@ function enzymeCreateDifferentiatePassWithOptions(postpasses, verifyPostPasses)
     @ccall Reactant_jll.libReactantExtra.enzymeCreateDifferentiatePassWithOptions(
         postpasses::MlirStringRef, verifyPostPasses::Bool
     )::MlirPass
-end
-
-"""
-    enzymeCreateConvertEnzymeToMemRefPass()
-
-Create the `--enzyme-ops-to-memref` pass, which lowers `enzyme.init`, `enzyme.get`, and `enzyme.set` to `memref` + `scf.if`. Required before lowering to LLVM.
-"""
-function enzymeCreateConvertEnzymeToMemRefPass()
-    @ccall Reactant_jll.libReactantExtra.enzymeCreateConvertEnzymeToMemRefPass()::MlirPass
-end
-
-"""
-    enzymeCreateBatchPass()
-
-Create the `--enzyme-batch` pass, which lowers `enzyme.batch` ops to calls to generated `\\_*` functions.
-"""
-function enzymeCreateBatchPass()
-    @ccall Reactant_jll.libReactantExtra.enzymeCreateBatchPass()::MlirPass
-end
-
-"""
-    enzymeCreateBatchDiffPass()
-
-Create the `--enzyme-batch-diff` pass, which differentiates batched functions produced by `--enzyme-batch`.
-"""
-function enzymeCreateBatchDiffPass()
-    @ccall Reactant_jll.libReactantExtra.enzymeCreateBatchDiffPass()::MlirPass
-end
-
-"""
-    enzymeCreateRemoveUnusedEnzymeOpsPass()
-
-Create the `--remove-unnecessary-enzyme-ops` pass, which removes dead `enzyme.*` ops after differentiation.
-"""
-function enzymeCreateRemoveUnusedEnzymeOpsPass()
-    @ccall Reactant_jll.libReactantExtra.enzymeCreateRemoveUnusedEnzymeOpsPass()::MlirPass
 end
 
 """

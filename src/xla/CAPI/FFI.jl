@@ -957,8 +957,17 @@ struct XLA_FFI_Communicator_Get_Args
     num_groups::Csize_t
     communication_id::Int64
     communicator::Ptr{XLA_FFI_Communicator}
+    rank::Int32
+    size::Int32
     function XLA_FFI_Communicator_Get_Args(
-        extension_start, group_mode, groups, num_groups, communication_id, communicator
+        extension_start,
+        group_mode,
+        groups,
+        num_groups,
+        communication_id,
+        communicator,
+        rank,
+        size,
     )
         return new(
             csizeof(XLA_FFI_Communicator_Get_Args),
@@ -968,6 +977,8 @@ struct XLA_FFI_Communicator_Get_Args
             num_groups,
             communication_id,
             communicator,
+            rank,
+            size,
         )
     end
 end
@@ -979,6 +990,8 @@ function Base.getproperty(x::Ptr{XLA_FFI_Communicator_Get_Args}, f::Symbol)
     f === :num_groups && return Ptr{Csize_t}(x + 32)
     f === :communication_id && return Ptr{Int64}(x + 40)
     f === :communicator && return Ptr{Ptr{XLA_FFI_Communicator}}(x + 48)
+    f === :rank && return Ptr{Int32}(x + 56)
+    f === :size && return Ptr{Int32}(x + 60)
     return getfield(x, f)
 end
 
@@ -986,7 +999,7 @@ function Base.setproperty!(x::Ptr{XLA_FFI_Communicator_Get_Args}, f::Symbol, v)
     return unsafe_store!(getproperty(x, f), v)
 end
 
-csizeof(::Type{XLA_FFI_Communicator_Get_Args}) = Csize_t(56)
+csizeof(::Type{XLA_FFI_Communicator_Get_Args}) = Csize_t(64)
 
 mutable struct XLA_FFI_Window end
 
@@ -1165,6 +1178,16 @@ mutable struct XLA_FFI_Command end
     XLA_FFI_RecordAction_Update = 1
 end
 
+struct XLA_FFI_RecordKernel
+    struct_size::Csize_t
+    extension_start::Ptr{XLA_FFI_InternalExtension}
+    kernel::Ptr{XLA_FFI_Kernel}
+    _function::Ptr{Cvoid}
+    function_name::XLA_FFI_ByteSpan
+end
+
+csizeof(::Type{XLA_FFI_RecordKernel}) = Csize_t(48)
+
 struct XLA_FFI_RecordApi
     create_launch::Ptr{Cvoid}
     update_launch::Ptr{Cvoid}
@@ -1198,10 +1221,10 @@ const XLA_FFI_Extension_Collectives = 129
 
 const XLA_FFI_Extension_Collectives_MajorVersion = 0
 
-const XLA_FFI_Extension_Collectives_MinorVersion = 2
+const XLA_FFI_Extension_Collectives_MinorVersion = 3
 
 const XLA_FFI_Extension_Record = 128
 
 const XLA_FFI_Extension_Record_MajorVersion = 0
 
-const XLA_FFI_Extension_Record_MinorVersion = 4
+const XLA_FFI_Extension_Record_MinorVersion = 5

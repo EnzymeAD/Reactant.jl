@@ -1647,6 +1647,22 @@ end
 Computes dot products between slices of `lhs` and slices of `rhs` and
 produces a `result` tensor.
 
+Optionally accepts trailing `ext_operands` referenced by
+`block_scaling_config` (`#stablehlo.block_scaling_config`) and
+`sparsity_config` (`#stablehlo.sparsity_config`) using absolute operand
+indices (where `lhs` is 0, `rhs` is 1, and `ext_operands[i]` is `i + 2`):
+* `block_scaling_config`: `#stablehlo.block_scaling_config<lhs = #stablehlo.tensor_block_scaling_config<scale_idx = <i64>, zero_idx = <i64>, strides = [...], steps = [...]>, rhs = ...>`.
+  The referenced scale tensor must have the same rank as the operand and
+  each scale dimension size must evenly divide the corresponding operand
+  dimension size.
+* `sparsity_config`: `#stablehlo.sparsity_config<lhs = #stablehlo.tensor_sparsity_config<num_non_zero = <i64>, block_size = <i64>, dimension = <i64>, stride = <i64>, idx = <i64>>, rhs = ...>`
+  describing structured sparsity along a contracting dimension
+  (`num_non_zero == 1`, `block_size > 1`, `stride >= 1`). Along the sparse
+  contracting dimension, the operand has compressed size
+  `K * num_non_zero / block_size` while its logical contracting size is `K`.
+  With `stride = 1` each sparsity block is `block_size` consecutive
+  elements; with `stride = k` its elements are `k` apart.
+
 See:
 https://github.com/openxla/stablehlo/blob/main/docs/spec.md#dot_general
 
@@ -1662,15 +1678,18 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#dot_general
 """
 function dot_general(
     lhs::Value,
-    rhs::Value;
+    rhs::Value,
+    ext_operands::Vector{Value};
     result_0::IR.Type,
     dot_dimension_numbers,
     precision_config=nothing,
     algorithm=nothing,
+    block_scaling_config=nothing,
+    sparsity_config=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[result_0,]
-    operands = Value[lhs, rhs]
+    operands = Value[lhs, rhs, ext_operands...]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute(
@@ -1679,6 +1698,10 @@ function dot_general(
     !isnothing(precision_config) &&
         push!(attributes, NamedAttribute("precision_config", precision_config))
     !isnothing(algorithm) && push!(attributes, NamedAttribute("algorithm", algorithm))
+    !isnothing(block_scaling_config) &&
+        push!(attributes, NamedAttribute("block_scaling_config", block_scaling_config))
+    !isnothing(sparsity_config) &&
+        push!(attributes, NamedAttribute("sparsity_config", sparsity_config))
 
     return create_operation(
         "stablehlo.dot_general",
