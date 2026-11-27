@@ -750,11 +750,49 @@ Base.@nospecializeinfer function finalize_mlir_fn(
 
             continue
         end
-        if args_in_result != :all
-            if has_idx(v, argprefix)
-                if !(args_in_result == :result && has_idx(v, resprefix))
+        if !has_idx(v, argprefix)
+            newpaths = Tuple[]
+            for path in v.paths
+                if length(path) == 0
                     continue
                 end
+                if path[1] == resargprefix
+                    traced_leaf = traced_args[path[2]]
+                    for p in path[3:end]
+                        traced_leaf = Reactant.Compiler.traced_getfield(traced_leaf, p)
+                    end
+                    if !(traced_leaf isa Reactant.TracedType)
+                        continue
+                    end
+                    if concretein
+                        original_arg = args[path[2]]
+                        for p in path[3:end]
+                            original_arg = Reactant.Compiler.traced_getfield(
+                                original_arg, p
+                            )
+                        end
+                        if !(
+                            original_arg isa Union{
+                                Reactant.ConcreteRNumber,
+                                Reactant.ConcreteRArray,
+                                Reactant.TracedType,
+                            }
+                        )
+                            continue
+                        end
+                    end
+                end
+                push!(newpaths, path)
+            end
+            if isempty(newpaths)
+                continue
+            end
+            if length(newpaths) != length(v.paths)
+                v = Reactant.repath(v, (newpaths...,))
+            end
+        elseif args_in_result != :all
+            if !(args_in_result == :result && has_idx(v, resprefix))
+                continue
             end
         end
         push!(linear_results, v)
