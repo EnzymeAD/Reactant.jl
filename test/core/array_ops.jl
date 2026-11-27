@@ -670,3 +670,84 @@ end
         @test Array(result) ≈ [1.0, 2.0, 3.0, 4.0]
     end
 end
+
+_test_scalar_setindex!(c) = (c[1] = 1.0f0)
+
+@testset "Eager ConcreteRArray Concatenation & Slice setindex! (#1663)" begin
+    prev_has_scalar = haskey(task_local_storage(), :ScalarIndexing)
+    prev_scalar = get(task_local_storage(), :ScalarIndexing, nothing)
+    task_local_storage(:ScalarIndexing, Reactant.GPUArraysCore.ScalarDisallowed)
+    try
+        devs = Reactant.devices()
+        sharding_modes = length(devs) >= 2 ? (false, true) : (false,)
+
+        w1_h = Float32[1 2; 3 4; 5 6]
+        b1_h = Float32[10, 20, 30]
+        w2_h = Float32[7 8 9; 11 12 13]
+        b2_h = Float32[40, 50]
+
+        for use_sharding in sharding_modes
+            sharding_rep = if use_sharding
+                Sharding.Replicated(Sharding.Mesh(reshape(devs[1:2], 2), (:x,)))
+            else
+                Sharding.NoSharding()
+            end
+            w1 = Reactant.to_rarray(w1_h; sharding=sharding_rep)
+            b1 = Reactant.to_rarray(b1_h; sharding=sharding_rep)
+            w2 = Reactant.to_rarray(w2_h; sharding=sharding_rep)
+            b2 = Reactant.to_rarray(b2_h; sharding=sharding_rep)
+
+            flat = reduce(vcat, AbstractVector[vec(w1), b1, vec(w2), b2])
+            @test flat isa ConcreteRArray{Float32,1}
+            @test Array(flat) ==
+                reduce(vcat, AbstractVector[vec(w1_h), b1_h, vec(w2_h), b2_h])
+
+            @test Array(reduce(vcat, [b1, b2])) == reduce(vcat, [b1_h, b2_h])
+            @test Array(reduce(hcat, [w1, w1])) == reduce(hcat, [w1_h, w1_h])
+
+            @test Array(vcat(b1, b2)) == vcat(b1_h, b2_h)
+            @test Array(vcat(vec(w1), b1)) == vcat(vec(w1_h), b1_h)
+            @test Array(vcat(w1, w1)) == vcat(w1_h, w1_h)
+            @test Array(hcat(w1, w2')) == hcat(w1_h, w2_h')
+            @test Array(cat(w1, w1; dims=3)) == cat(w1_h, w1_h; dims=3)
+
+            if !use_sharding
+                @test Array(reduce(hcat, AbstractMatrix[w1, w2'])) ==
+                    reduce(hcat, AbstractMatrix[w1_h, w2_h'])
+                @test Array(cat(w1, w1; dims=(1, 2))) == cat(w1_h, w1_h; dims=(1, 2))
+                @test Array(vcat(99.0f0, b1)) == vcat(99.0f0, b1_h)
+                @test Array(vcat(b1, 99.0f0)) == vcat(b1_h, 99.0f0)
+                @test Array(hcat(99.0f0, b1')) == hcat(99.0f0, b1_h')
+                @test Array(hcat(b1', 99.0f0)) == hcat(b1_h', 99.0f0)
+            end
+
+            c = if use_sharding
+                Reactant.to_rarray(copy(b1_h); sharding=sharding_rep)
+            else
+                Reactant.to_rarray(copy(b1_h))
+            end
+            c[1:2] = b2
+            @test Array(c) == Float32[40, 50, 30]
+            if use_sharding
+                @test_throws Exception _test_scalar_setindex!(c)
+            end
+
+            m = Reactant.to_rarray(zeros(Float32, 3, 4); sharding=sharding_rep)
+            m[:, 2:3] = w1
+            @test Array(m) == Float32[0 1 2 0; 0 3 4 0; 0 5 6 0]
+
+            sub_dst = Reactant.to_rarray(zeros(Float32, 10); sharding=sharding_rep)
+            Base._typed_vcat!(view(sub_dst, 2:6), AbstractVector[b1, b2])
+            @test Array(sub_dst) == Float32[0, 10, 20, 30, 40, 50, 0, 0, 0, 0]
+
+            @test_throws DimensionMismatch vcat(w1, w2)
+            @test_throws DimensionMismatch hcat(w1, w2)
+        end
+    finally
+        if prev_has_scalar
+            task_local_storage(:ScalarIndexing, prev_scalar)
+        else
+            delete!(task_local_storage(), :ScalarIndexing)
+        end
+    end
+end
