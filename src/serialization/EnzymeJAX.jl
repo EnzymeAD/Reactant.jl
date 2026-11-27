@@ -195,23 +195,277 @@ _has_sharding_info(x) = false
 function _extract_sharding_info(x::Reactant.ConcreteRArray)
     sharding = x.sharding
     if sharding isa Reactant.Sharding.ShardInfo
-        inner_sharding = sharding.sharding
-        if inner_sharding isa Reactant.Sharding.NamedSharding
-            # TODO(#2260): we need to export is_closed, priority, and subaxes at some point
-            return (;
-                type="NamedSharding",
-                mesh=inner_sharding.mesh,
-                partition_spec=inner_sharding.partition_spec,
-            )
-        elseif inner_sharding isa Reactant.Sharding.Replicated
-            return (; type="Replicated", mesh=inner_sharding.mesh)
-        elseif inner_sharding isa Reactant.Sharding.NoSharding
-            return (; type="NoSharding")
-        else
-            error("Unsupported sharding type: $(typeof(inner_sharding))")
-        end
+        return _extract_inner_sharding_info(sharding.sharding, ndims(x))
     end
     return (; type="NoSharding")
+end
+
+function _extract_inner_sharding_info(
+    inner_sharding::Reactant.Sharding.NamedSharding, ::Int
+)
+    return (;
+        type="NamedSharding",
+        mesh=inner_sharding.mesh,
+        partition_spec=inner_sharding.partition_spec,
+        is_closed=inner_sharding.is_closed,
+        priority=inner_sharding.priority,
+        subaxes=inner_sharding.subaxes,
+    )
+end
+
+function _extract_inner_sharding_info(
+    inner_sharding::Reactant.Sharding.HloSharding, ndims_x::Int
+)
+    if inner_sharding.parent_sharding isa Reactant.Sharding.NamedSharding
+        parent = inner_sharding.parent_sharding
+        return (;
+            type="NamedSharding",
+            mesh=inner_sharding.mesh,
+            partition_spec=parent.partition_spec,
+            is_closed=inner_sharding.is_closed,
+            priority=inner_sharding.priority,
+            subaxes=parent.subaxes,
+        )
+    elseif inner_sharding.parent_sharding !== nothing
+        return _extract_inner_sharding_info(inner_sharding.parent_sharding, ndims_x)
+    end
+    return error("Unsupported sharding type: $(typeof(inner_sharding))")
+end
+
+function _extract_inner_sharding_info(
+    inner_sharding::Reactant.Sharding.DimsSharding, ndims_x::Int
+)
+    return _extract_inner_sharding_info(
+        Reactant.Sharding.NamedSharding(inner_sharding, ndims_x), ndims_x
+    )
+end
+
+function _extract_inner_sharding_info(inner_sharding::Reactant.Sharding.Replicated, ::Int)
+    return (; type="Replicated", mesh=inner_sharding.mesh)
+end
+
+function _extract_inner_sharding_info(::Reactant.Sharding.NoSharding, ::Int)
+    return (; type="NoSharding")
+end
+
+function _extract_inner_sharding_info(inner_sharding, ::Int)
+    return error("Unsupported sharding type: $(typeof(inner_sharding))")
+end
+
+function _py_tuple(items::AbstractVector{String})
+    isempty(items) && return "()"
+    length(items) == 1 && return "($(items[1]),)"
+    return "($(join(items, ", ")))"
+end
+
+_py_bool(b::Bool) = b ? "True" : "False"
+
+function _compute_mesh_axis_split_bounds(mesh::Reactant.Sharding.Mesh, input_info::Vector)
+    n_axes = length(mesh.axis_names)
+    axis_bounds = Vector{Vector{Int}}(undef, n_axes)
+    for k in 1:n_axes
+        ax = mesh.axis_names[k]
+        ax_size = Int(mesh.axis_sizes[k])
+        bounds = Int[1, ax_size]
+        for idx in 1:length(input_info)
+            sharding_info = input_info[idx].sharding
+            if sharding_info !== nothing &&
+                sharding_info.type == "NamedSharding" &&
+                sharding_info.mesh === mesh
+                for d in 1:length(sharding_info.partition_spec)
+                    pspec_d = sharding_info.partition_spec[d]
+                    subaxes_d = sharding_info.subaxes[d]
+                    for j in 1:length(pspec_d)
+                        sa = subaxes_d[j]
+                        if pspec_d[j] === ax && sa !== nothing
+                            pre, sz = sa
+                            push!(bounds, Int(pre))
+                            push!(bounds, Int(pre * sz))
+                        end
+                    end
+                end
+            end
+        end
+        unique!(sort!(bounds))
+        axis_bounds[k] = bounds
+    end
+    return axis_bounds
+end
+
+function _is_default_iota_mesh(mesh::Reactant.Sharding.Mesh)
+    n = length(mesh)
+    (length(mesh.device_ids) == n && length(mesh.logical_device_ids) == n) || return false
+    for idx in 1:n
+        (mesh.device_ids[idx] == idx - 1 && mesh.logical_device_ids[idx] == idx - 1) ||
+            return false
+    end
+    return true
+end
+
+function _build_mesh_code(
+    pymesh::String, mesh::Reactant.Sharding.Mesh, axis_bounds::Vector{Vector{Int}}
+)
+    effective_names = String[]
+    effective_sizes = String[]
+    for k in 1:length(mesh.axis_names)
+        ax_str = String(mesh.axis_names[k])
+        ax_size = Int(mesh.axis_sizes[k])
+        bounds = axis_bounds[k]
+        if length(bounds) <= 2
+            push!(effective_names, "'$(ax_str)'")
+            push!(effective_sizes, string(ax_size))
+        else
+            for m in 1:(length(bounds) - 1)
+                @assert bounds[m + 1] % bounds[m] == 0
+                push!(effective_names, "'$(ax_str)_sub_$(m - 1)'")
+                push!(effective_sizes, string(div(bounds[m + 1], bounds[m])))
+            end
+        end
+    end
+    sizes_tuple = _py_tuple(effective_sizes)
+    names_tuple = _py_tuple(effective_names)
+    axis_types_expr = "(jax.sharding.AxisType.Auto,) * $(length(effective_names))"
+    if _is_default_iota_mesh(mesh)
+        return "$(pymesh) = jax.make_mesh($(sizes_tuple), $(names_tuple), $(axis_types_expr))"
+    end
+    ord_devs = String[]
+    for lid in mesh.logical_device_ids
+        push!(ord_devs, "jax.devices()[$(mesh.device_ids[lid + 1])]")
+    end
+    return "$(pymesh) = jax.sharding.Mesh(np.array([$(join(ord_devs, ", "))]).reshape($(sizes_tuple)), $(names_tuple), axis_types=$(axis_types_expr))"
+end
+
+function _resolve_axis_to_mesh_names(
+    ax::Symbol,
+    subaxis::Union{Nothing,Dims{2}},
+    mesh::Reactant.Sharding.Mesh,
+    axis_bounds::Vector{Vector{Int}},
+)
+    k = findfirst(==(ax), mesh.axis_names)
+    @assert k !== nothing "Axis $(ax) not found in mesh $(mesh.axis_names)"
+    ax_str = String(ax)
+    bounds = axis_bounds[k]
+    if length(bounds) <= 2
+        return String["'$(ax_str)'"]
+    end
+    names = String[]
+    if subaxis === nothing
+        for m in 1:(length(bounds) - 1)
+            push!(names, "'$(ax_str)_sub_$(m - 1)'")
+        end
+    else
+        pre, sz = subaxis
+        target_end = pre * sz
+        for m in 1:(length(bounds) - 1)
+            if bounds[m] >= pre && bounds[m + 1] <= target_end
+                push!(names, "'$(ax_str)_sub_$(m - 1)'")
+            end
+        end
+    end
+    return names
+end
+
+function _format_pspec_dim_for_device_put(
+    pspec_d::Vector{Union{Nothing,Symbol}},
+    subaxes_d::Vector{Union{Nothing,Dims{2}}},
+    mesh::Reactant.Sharding.Mesh,
+    axis_bounds::Vector{Vector{Int}},
+)
+    resolved = String[]
+    for j in 1:length(pspec_d)
+        ax = pspec_d[j]
+        ax === nothing && continue
+        append!(resolved, _resolve_axis_to_mesh_names(ax, subaxes_d[j], mesh, axis_bounds))
+    end
+    isempty(resolved) && return "None"
+    length(resolved) == 1 && return resolved[1]
+    return _py_tuple(resolved)
+end
+
+function _format_pspec_dim_raw(pspec_d::Vector{Union{Nothing,Symbol}})
+    axes = String[]
+    for ax in pspec_d
+        ax === nothing && continue
+        push!(axes, "'$(String(ax))'")
+    end
+    isempty(axes) && return "None"
+    length(axes) == 1 && return axes[1]
+    return _py_tuple(axes)
+end
+
+function _format_subaxes_dim_py(subaxes_d::Vector{Union{Nothing,Dims{2}}})
+    items = String[]
+    for sa in subaxes_d
+        if sa === nothing
+            push!(items, "None")
+        else
+            push!(items, "($(sa[1]), $(sa[2]))")
+        end
+    end
+    return _py_tuple(items)
+end
+
+function _format_sdy_sharding_str(sharding_info)
+    nd = length(sharding_info.partition_spec)
+    dim_strs = Vector{String}(undef, nd)
+    for d in 1:nd
+        rev_d = nd - d + 1
+        pspec_d = sharding_info.partition_spec[rev_d]
+        subaxes_d = sharding_info.subaxes[rev_d]
+        closed = sharding_info.is_closed[rev_d]
+        prio = sharding_info.priority[rev_d]
+        parts = String[]
+        for j in 1:length(pspec_d)
+            ax = pspec_d[j]
+            ax === nothing && continue
+            sa = subaxes_d[j]
+            if sa === nothing
+                push!(parts, "\\\"$(String(ax))\\\"")
+            else
+                push!(parts, "\\\"$(String(ax))\\\":($(sa[1]))$(sa[2])")
+            end
+        end
+        if !closed
+            push!(parts, "?")
+        end
+        prio_str = prio >= 0 ? "p$(prio)" : ""
+        dim_strs[d] = "{" * join(parts, ", ") * "}" * prio_str
+    end
+    return "#sdy.sharding<@mesh, [" * join(dim_strs, ", ") * "]>"
+end
+
+function _format_mesh_axes_py(mesh::Reactant.Sharding.Mesh)
+    pairs = String[]
+    for k in 1:length(mesh.axis_names)
+        push!(pairs, "('$(String(mesh.axis_names[k]))', $(Int(mesh.axis_sizes[k])))")
+    end
+    return _py_tuple(pairs)
+end
+
+function _format_sharding_metadata_entry(arg_name::String, sharding_info)
+    if sharding_info === nothing || sharding_info.type == "NoSharding"
+        return "\"$(arg_name)\": {\"type\": \"NoSharding\"}"
+    elseif sharding_info.type == "Replicated"
+        mesh_axes_py = _format_mesh_axes_py(sharding_info.mesh)
+        return "\"$(arg_name)\": {\"type\": \"Replicated\", \"mesh_axes\": $(mesh_axes_py)}"
+    elseif sharding_info.type == "NamedSharding"
+        nd = length(sharding_info.partition_spec)
+        pspec_items = String[]
+        closed_items = String[]
+        prio_items = String[]
+        subaxes_items = String[]
+        for d in nd:-1:1
+            push!(pspec_items, _format_pspec_dim_raw(sharding_info.partition_spec[d]))
+            push!(closed_items, _py_bool(sharding_info.is_closed[d]))
+            push!(prio_items, string(sharding_info.priority[d]))
+            push!(subaxes_items, _format_subaxes_dim_py(sharding_info.subaxes[d]))
+        end
+        mesh_axes_py = _format_mesh_axes_py(sharding_info.mesh)
+        sdy_str = _format_sdy_sharding_str(sharding_info)
+        return "\"$(arg_name)\": {\"type\": \"NamedSharding\", \"mesh_axes\": $(mesh_axes_py), \"partition_spec\": $(_py_tuple(pspec_items)), \"is_closed\": $(_py_tuple(closed_items)), \"priority\": $(_py_tuple(prio_items)), \"subaxes\": $(_py_tuple(subaxes_items)), \"sdy_sharding\": \"$(sdy_str)\"}"
+    else
+        error("Unsupported sharding type: $(sharding_info.type)")
+    end
 end
 
 function save_inputs_npz(
@@ -242,78 +496,98 @@ function _generate_python_script(
     input_rel = relpath(input_path, output_dir)
 
     # Generate argument list and documentation
-    arg_names = ["arg$i" for i in 1:length(input_info)]
+    n_inputs = length(input_info)
+    arg_names = Vector{String}(undef, n_inputs)
+    arg_doc_lines = Vector{String}(undef, n_inputs)
+    arg_size_checks = Vector{String}(undef, n_inputs)
+    arg_dtype_checks = Vector{String}(undef, n_inputs)
+    for i in 1:n_inputs
+        info = input_info[i]
+        arg_name = "arg$i"
+        arg_names[i] = arg_name
+        rev_shape = reverse(info.shape)
+        np_dtype = Serialization.NUMPY_SIMPLE_TYPES[info.dtype]
+        arg_doc_lines[i] = "        $(arg_name): Array of shape $(rev_shape) and dtype $(np_dtype). Path: $(info.path)"
+        arg_size_checks[i] = "assert $(arg_name).shape == $(rev_shape), f\"Expected shape of $(arg_name) to be $(rev_shape). Got {$(arg_name).shape} (path: $(info.path))\""
+        arg_dtype_checks[i] = "assert $(arg_name).dtype == np.dtype('$(np_dtype)'), f\"Expected dtype of $(arg_name) to be $(np_dtype). Got {$(arg_name).dtype} (path: $(info.path))\""
+    end
     arg_list = join(arg_names, ", ")
-
-    # Generate docstring for arguments
-    arg_docs = join(
-        [
-            "        $(arg_names[i]): Array of shape $(reverse(info.shape)) and dtype $(Serialization.NUMPY_SIMPLE_TYPES[info.dtype]). Path: $(info.path)"
-            for (i, info) in enumerate(input_info)
-        ],
-        "\n",
-    )
-
-    arg_size_checks = [
-        "assert $(arg_names[i]).shape == $(reverse(info.shape)), f\"Expected shape of $(arg_names[i]) to be $(reverse(info.shape)). Got {$(arg_names[i]).shape} (path: $(info.path))\""
-        for (i, info) in enumerate(input_info)
-    ]
-    arg_dtype_checks = [
-        "assert $(arg_names[i]).dtype == np.dtype('$(Serialization.NUMPY_SIMPLE_TYPES[info.dtype])'), f\"Expected dtype of $(arg_names[i]) to be $(Serialization.NUMPY_SIMPLE_TYPES[info.dtype]). Got {$(arg_names[i]).dtype} (path: $(info.path))\""
-        for (i, info) in enumerate(input_info)
-    ]
+    arg_docs = join(arg_doc_lines, "\n")
 
     # Generate sharding annotations if available
-    has_any_sharding =
-        preserve_sharding && any(info.sharding !== nothing for info in input_info)
+    has_any_sharding = false
+    if preserve_sharding
+        for i in 1:n_inputs
+            if input_info[i].sharding !== nothing
+                has_any_sharding = true
+                break
+            end
+        end
+    end
 
     device_put_calls = String[]
+    sharding_metadata_block = ""
     if has_any_sharding
-        inserted_meshes = IdDict()
+        metadata_entries = Vector{String}(undef, n_inputs)
+        for i in 1:n_inputs
+            metadata_entries[i] = _format_sharding_metadata_entry(
+                arg_names[i], input_info[i].sharding
+            )
+        end
+        sharding_metadata_block =
+            "\n    SHARDING_METADATA = {\n        " *
+            join(metadata_entries, ",\n        ") *
+            ",\n    }\n"
+
+        inserted_meshes = IdDict{Any,Tuple{String,Vector{Vector{Int}}}}()
         counter = 0
-        for (i, info) in enumerate(input_info)
-            if info.sharding !== nothing
-                if haskey(inserted_meshes, info.sharding.mesh)
-                    pymesh = inserted_meshes[info.sharding.mesh]
-                else
-                    pymesh = "mesh$counter"
-                    counter += 1
-                    inserted_meshes[info.sharding.mesh] = pymesh
-                    axis_sizes = join(string.(reverse(info.sharding.mesh.axis_sizes)), ", ")
-                    mesh_axes = join(
-                        reverse(["'$(string(x))'" for x in info.sharding.mesh.axis_names]),
-                        ", ",
-                    )
+        for i in 1:n_inputs
+            info = input_info[i]
+            arg_name = arg_names[i]
+            if info.sharding === nothing || info.sharding.type == "NoSharding"
+                push!(device_put_calls, "$(arg_name) = jnp.asarray($(arg_name))")
+                continue
+            end
 
-                    push!(
-                        device_put_calls,
-                        "$(pymesh) = jax.make_mesh(($(axis_sizes)), ($(mesh_axes)))",
-                    )
-                end
-
+            if haskey(inserted_meshes, info.sharding.mesh)
+                pymesh, axis_bounds = inserted_meshes[info.sharding.mesh]
+            else
+                pymesh = "mesh$counter"
+                counter += 1
+                axis_bounds = _compute_mesh_axis_split_bounds(
+                    info.sharding.mesh, input_info
+                )
+                inserted_meshes[info.sharding.mesh] = (pymesh, axis_bounds)
                 push!(
                     device_put_calls,
-                    "# Set up sharding for $(arg_names[i]): $(info.sharding.type)",
+                    _build_mesh_code(pymesh, info.sharding.mesh, axis_bounds),
                 )
-
-                # Create device_put call with NamedSharding
-                if info.sharding.type == "NoSharding"
-                    device_put_calls_str = "$(arg_names[i]) = jnp.asarray($(arg_names[i]))"
-                elseif info.sharding.type == "NamedSharding"
-                    pstrings = [
-                        if length(p) == 1
-                            p[1] isa Nothing ? "None" : "'$(string(p[1]))'"
-                        else
-                            join(string.(reverse(p)), ", ")
-                        end for p in info.sharding.partition_spec
-                    ]
-                    partition_spec = join(reverse(pstrings), ", ")
-                    device_put_calls_str = "$(arg_names[i]) = jax.device_put($(arg_names[i]), jax.sharding.NamedSharding($(pymesh), P($(partition_spec))))"
-                else
-                    error("Unsupported sharding type: $(info.sharding.type)")
-                end
-                push!(device_put_calls, device_put_calls_str)
             end
+
+            push!(
+                device_put_calls, "# Set up sharding for $(arg_name): $(info.sharding.type)"
+            )
+
+            if info.sharding.type == "Replicated"
+                device_put_calls_str = "$(arg_name) = jax.device_put($(arg_name), jax.sharding.NamedSharding($(pymesh), P()))"
+            elseif info.sharding.type == "NamedSharding"
+                nd = length(info.sharding.partition_spec)
+                pstrings = Vector{String}(undef, nd)
+                for d in 1:nd
+                    rev_d = nd - d + 1
+                    pstrings[d] = _format_pspec_dim_for_device_put(
+                        info.sharding.partition_spec[rev_d],
+                        info.sharding.subaxes[rev_d],
+                        info.sharding.mesh,
+                        axis_bounds,
+                    )
+                end
+                partition_spec = join(pstrings, ", ")
+                device_put_calls_str = "$(arg_name) = jax.device_put($(arg_name), jax.sharding.NamedSharding($(pymesh), P($(partition_spec))))"
+            else
+                error("Unsupported sharding type: $(info.sharding.type)")
+            end
+            push!(device_put_calls, device_put_calls_str)
         end
     end
 
@@ -322,9 +596,11 @@ function _generate_python_script(
             $(join(device_put_calls, "\n    "))
         """
     else
-        convert_str_list = join(
-            ["    $(argname) = jnp.asarray($(argname))" for argname in arg_names], "\n"
-        )
+        convert_lines = Vector{String}(undef, n_inputs)
+        for i in 1:n_inputs
+            convert_lines[i] = "    $(arg_names[i]) = jnp.asarray($(arg_names[i]))"
+        end
+        convert_str_list = join(convert_lines, "\n")
         inputs_to_jax_arrays = """
         # Convert inputs to jax arrays
         $(convert_str_list)
@@ -332,7 +608,10 @@ function _generate_python_script(
     end
 
     if export_data_as_npz
-        load_inputs = ["npz_data['$(info.key)']" for info in input_info]
+        load_inputs = Vector{String}(undef, n_inputs)
+        for i in 1:n_inputs
+            load_inputs[i] = "npz_data['$(input_info[i].key)']"
+        end
 
         load_inputs_fn = """
     def load_inputs():
@@ -354,7 +633,8 @@ function _generate_python_script(
 
         inputs = []"""
 
-        for (i, info) in enumerate(input_info)
+        for i in 1:n_inputs
+            info = input_info[i]
             load_inputs_fn *= """\n    tmp, prng_key = generate_random_inputs(prng_key, $(reverse(info.shape)), jnp.dtype('$(Serialization.NUMPY_SIMPLE_TYPES[info.dtype])'))\n    inputs.append(tmp)"""
         end
 
@@ -382,7 +662,7 @@ function _generate_python_script(
     # Load the MLIR/StableHLO code
     with open(os.path.join(_script_dir, \"$(mlir_rel)\"), \"r\") as f:
         _hlo_code = f.read()
-
+    $(sharding_metadata_block)
     $(load_inputs_fn)
 
     @jax.jit
