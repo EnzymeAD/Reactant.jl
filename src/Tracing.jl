@@ -527,6 +527,60 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 end
 
+@static if isdefined(Core, :GenericMemory)
+    Base.@nospecializeinfer function traced_type_inner(
+        @nospecialize(M::Type{<:Core.GenericMemory}),
+        seen,
+        mode::TraceMode,
+        @nospecialize(track_numbers::Type),
+        @nospecialize(ndevices),
+        @nospecialize(runtime)
+    )
+        if M isa UnionAll
+            M´ = Base.unwrap_unionall(M)
+            kind, T, addrspace = M´.parameters
+            traced_T = traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime)
+            M´´ = Core.GenericMemory{kind,traced_T,addrspace}
+            M_ret = addrspace isa Core.TypeVar ? UnionAll(addrspace, M´´) : M´´
+            M_ret2 = T isa Core.TypeVar ? UnionAll(traced_T, M_ret) : M_ret
+            return kind isa Core.TypeVar ? UnionAll(kind, M_ret2) : M_ret2
+        else
+            kind, T, addrspace = M.parameters
+            return Core.GenericMemory{
+                kind,
+                traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime),
+                addrspace,
+            }
+        end
+    end
+
+    Base.@nospecializeinfer function traced_type_inner(
+        @nospecialize(M::Type{<:Core.GenericMemoryRef}),
+        seen,
+        mode::TraceMode,
+        @nospecialize(track_numbers::Type),
+        @nospecialize(ndevices),
+        @nospecialize(runtime)
+    )
+        if M isa UnionAll
+            M´ = Base.unwrap_unionall(M)
+            kind, T, addrspace = M´.parameters
+            traced_T = traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime)
+            M´´ = Core.GenericMemoryRef{kind,traced_T,addrspace}
+            M_ret = addrspace isa Core.TypeVar ? UnionAll(addrspace, M´´) : M´´
+            M_ret2 = T isa Core.TypeVar ? UnionAll(traced_T, M_ret) : M_ret
+            return kind isa Core.TypeVar ? UnionAll(kind, M_ret2) : M_ret2
+        else
+            kind, T, addrspace = M.parameters
+            return Core.GenericMemoryRef{
+                kind,
+                traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime),
+                addrspace,
+            }
+        end
+    end
+end
+
 Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(A::Type{<:BitArray}),
     seen,
@@ -1950,6 +2004,113 @@ Base.@nospecializeinfer function make_tracer(
         return prev
     end
     return newa
+end
+
+@static if isdefined(Core, :GenericMemory)
+    Base.@nospecializeinfer function make_tracer(
+        seen,
+        @nospecialize(prev::Core.GenericMemory),
+        @nospecialize(path),
+        mode;
+        @nospecialize(track_numbers::Type = Union{}),
+        @nospecialize(sharding = Sharding.NoSharding()),
+        @nospecialize(runtime = nothing),
+        @nospecialize(device = nothing),
+        @nospecialize(client = nothing),
+        kwargs...,
+    )
+        RT = Core.Typeof(prev)
+        if mode != NoStopTracedTrack && haskey(seen, prev)
+            if mode == TracedToTypes
+                visited = seen[prev]
+                push!(path, visited)
+                return nothing
+            end
+            return seen[prev]
+        end
+        if mode == TracedToTypes
+            if eltype(RT) <: ReactantPrimitive
+                push!(path, copy(prev))
+                seen[prev] = VisitedObject(length(seen) + 1)
+                return nothing
+            end
+            push!(path, RT)
+            seen[prev] = VisitedObject(length(seen) + 1)
+            for I in eachindex(prev)
+                if isassigned(prev, I)
+                    pv = prev[I]
+                    make_tracer(
+                        seen,
+                        pv,
+                        path,
+                        mode;
+                        track_numbers,
+                        sharding,
+                        runtime,
+                        device,
+                        client,
+                        kwargs...,
+                    )
+                end
+            end
+            return nothing
+        end
+        kind, T, addrspace = RT.parameters
+        TT = traced_type(T, Val(mode), track_numbers, sharding, runtime)
+        newm = Core.GenericMemory{kind,TT,addrspace}(undef, length(prev))
+        seen[prev] = newm
+        same = TT === T
+        for I in eachindex(prev)
+            if isassigned(prev, I)
+                pv = prev[I]
+                nv = make_tracer(
+                    seen,
+                    pv,
+                    append_path(path, I),
+                    mode;
+                    track_numbers,
+                    sharding=Base.getproperty(sharding, I),
+                    runtime,
+                    device,
+                    client,
+                    kwargs...,
+                )
+                if pv !== nv
+                    same = false
+                end
+                @inbounds newm[I] = nv
+            end
+        end
+        if same
+            seen[prev] = prev
+            return prev
+        end
+        return newm
+    end
+
+    Base.@nospecializeinfer function make_tracer(
+        seen,
+        @nospecialize(prev::Core.GenericMemoryRef),
+        @nospecialize(path),
+        mode;
+        kwargs...,
+    )
+        if mode == TracedToTypes
+            push!(path, Core.Typeof(prev))
+            push!(path, Core.memoryrefoffset(prev))
+            make_tracer(seen, prev.mem, path, mode; kwargs...)
+            return nothing
+        end
+        mem2 = make_tracer(seen, prev.mem, append_path(path, :mem), mode; kwargs...)
+        if mem2 === prev.mem
+            return prev
+        end
+        return if isempty(mem2)
+            Core.memoryref(mem2)
+        else
+            Core.memoryref(mem2, Core.memoryrefoffset(prev))
+        end
+    end
 end
 
 Base.@nospecializeinfer function make_tracer(
