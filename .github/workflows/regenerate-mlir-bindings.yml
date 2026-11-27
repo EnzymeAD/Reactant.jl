@@ -35,7 +35,7 @@ jobs:
         shell: julia --color=yes {0}
         run: |
           import Pkg
-          Pkg.add(; name="JuliaFormatter", version="1")
+          Pkg.add(; name="JuliaFormatter", version="2")
       - name: Instantiate dependencies
         shell: julia --project=. --color=yes {0}
         run: |

@@ -1,3 +1,5 @@
 style = "blue"
-always_use_return = true
 ignore = ["src/proto/**/*_pb.jl"]
+v2_stable_multiline_strings = true
+conditional_to_if = false
+pipe_to_function_call = false
