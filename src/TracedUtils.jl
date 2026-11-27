@@ -1052,17 +1052,48 @@ Base.@nospecializeinfer function finalize_mlir_fn(
     )
 end
 
-function __lookup_unique_name_in_module(mod, name)
-    new_name = name
-    MLIR.IR.@dispose tab = MLIR.IR.SymbolTable(MLIR.IR.Operation(mod)) begin
-        for i in 0:10000
-            new_name = i == 0 ? name : name * "_" * string(i)
-            MLIR.IR.mlirIsNull(MLIR.API.mlirSymbolTableLookup(tab, new_name)) &&
-                return new_name
+const _MODULE_UNIQUE_NAME_CACHE = Vector{Pair{Ptr{Cvoid},Dict{String,Int}}}()
+const _MODULE_UNIQUE_NAME_LOCK = ReentrantLock()
+
+function _get_module_name_counts(mod_ptr::Ptr{Cvoid})
+    for idx in eachindex(_MODULE_UNIQUE_NAME_CACHE)
+        entry = _MODULE_UNIQUE_NAME_CACHE[idx]
+        if entry.first === mod_ptr
+            return entry.second
         end
     end
-    modstr = string(mod)
-    return error("Mod\n$modstr\nCould not find unique name for $name")
+    if length(_MODULE_UNIQUE_NAME_CACHE) >= 8
+        popfirst!(_MODULE_UNIQUE_NAME_CACHE)
+    end
+    counts = Dict{String,Int}()
+    push!(_MODULE_UNIQUE_NAME_CACHE, mod_ptr => counts)
+    return counts
+end
+
+function __lookup_unique_name_in_module(mod, name)
+    name_str = String(name)
+    mod_ptr = MLIR.IR.Operation(mod).ref.ptr
+    i = Base.@lock _MODULE_UNIQUE_NAME_LOCK begin
+        get(_get_module_name_counts(mod_ptr), name_str, 0)
+    end
+    MLIR.IR.@dispose tab = MLIR.IR.SymbolTable(MLIR.IR.Operation(mod)) begin
+        if i > 0 && MLIR.IR.mlirIsNull(MLIR.API.mlirSymbolTableLookup(tab, name_str))
+            Base.@lock _MODULE_UNIQUE_NAME_LOCK begin
+                empty!(_get_module_name_counts(mod_ptr))
+            end
+            i = 0
+        end
+        while true
+            new_name = i == 0 ? name_str : string(name_str, "_", i)
+            if MLIR.IR.mlirIsNull(MLIR.API.mlirSymbolTableLookup(tab, new_name))
+                Base.@lock _MODULE_UNIQUE_NAME_LOCK begin
+                    _get_module_name_counts(mod_ptr)[name_str] = i + 1
+                end
+                return new_name
+            end
+            i += 1
+        end
+    end
 end
 
 function __take_region(compiled_fn)
