@@ -269,6 +269,30 @@ end
     @test res ≈ fn(Array(x_ra), Array(idxs_ra))
 end
 
+@testset "Boolean linear indexing (#3087)" begin
+    x = Reactant.TestUtils.construct_test_array(Float32, 4, 6)
+    x_ra = Reactant.to_rarray(x)
+    v = vec(x)
+    v_ra = Reactant.to_rarray(v)
+
+    fn(x, mask) = x[mask]
+
+    @testset "$(typeof(mask))" for mask in (
+        [iszero(mod(i, 3)) for i in 1:24], BitVector(isodd.(1:24))
+    )
+        @test @jit(fn(v_ra, mask)) ≈ v[mask]
+        @test v_ra[mask] ≈ v[mask]
+        @test @jit(fn(x_ra, mask)) ≈ x[mask]
+        @test @jit(fn(x_ra, reshape(mask, 4, 6))) ≈ x[reshape(mask, 4, 6)]
+    end
+
+    @test size(@jit(fn(v_ra, falses(24)))) == (0,)
+    @test @jit(fn(v_ra, trues(24))) ≈ v
+
+    @test_throws BoundsError @jit(fn(v_ra, trues(23)))
+    @test_throws ErrorException @jit(fn(v_ra, Reactant.to_rarray(isodd.(1:24))))
+end
+
 @testset "inconsistent indexing" begin
     x_ra = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 3, 4, 3))
     idx_ra = Reactant.to_rarray(1; track_numbers=Number)
