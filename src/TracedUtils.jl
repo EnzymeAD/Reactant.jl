@@ -1176,9 +1176,15 @@ function elem_apply_via_while_loop(
     # flattening the tensors makes the auto-batching pass work nicer
     flat_args = map(flattenarg, args)
 
-    # This wont be a mutating function so we can safely execute it once
+    # Save and restore MLIR state on traced objects around the type-probe call so
+    # stateful arguments (e.g. `Ref(ReactantRNG)`) do not advance an extra step.
     scalar_seed_args = @allowscalar map(Base.Fix2(getindex, 1), flat_args)
+    snaps = Tuple{Any,Any}[]
+    seen_snaps = IdDict()
+    _collect_traced_mlir_snapshots!(snaps, f, seen_snaps)
+    _collect_traced_mlir_snapshots!(snaps, scalar_seed_args, seen_snaps)
     res_tmp = @allowscalar(Reactant.call_with_reactant(f, scalar_seed_args...))
+    _restore_traced_mlir_snapshots!(snaps)
 
     # TODO: perhaps instead of this logic, we should have
     # `similar(::TracedRArray, TracedRNumber{T}) where T = similar(::TracedRArray, T)`
@@ -1212,6 +1218,98 @@ function elem_apply_via_while_loop(
     return ReactantCore.materialize_traced_array(reshape(result, out_size))
 end
 
+_has_nonscalar_traced(x::TracedRArray, _) = ndims(x) > 0
+function _has_nonscalar_traced(
+    ::Union{Reactant.TracedStepRangeLen,Reactant.TracedUnitRange,MissingTracedValue}, _
+)
+    return true
+end
+function _has_nonscalar_traced(
+    ::Union{
+        TracedRNumber,
+        Reactant.TracedRational,
+        Number,
+        Symbol,
+        Module,
+        DataType,
+        Nothing,
+        Missing,
+        Core.SimpleVector,
+        Exception,
+    },
+    _,
+)
+    return false
+end
+function _has_nonscalar_traced(x::AbstractArray, seen)
+    T = eltype(x)
+    if T !== Union{} && T <: TracedRNumber
+        return ndims(x) > 0
+    end
+    a = Reactant.ancestor(x)
+    a === x && return false
+    return _has_nonscalar_traced(a, seen)
+end
+function _has_nonscalar_traced(x::Vector, seen)
+    return Reactant.use_overlayed_version(x)
+end
+function _has_nonscalar_traced(x::T, seen=nothing) where {T}
+    isstructtype(T) || return false
+    if ismutabletype(T)
+        return Reactant.use_overlayed_version(x)
+    end
+    for i in 1:nfields(x)
+        isdefined(x, i) || continue
+        _has_nonscalar_traced(getfield(x, i), seen) && return true
+    end
+    return false
+end
+
+function _has_nonscalar_traced_ref(args::Tuple)
+    for arg in args
+        if arg isa Base.RefValue && _has_nonscalar_traced(arg[])
+            return true
+        end
+    end
+    return false
+end
+
+function _collect_traced_mlir_snapshots!(snaps::Vector{Tuple{Any,Any}}, x, seen::IdDict)
+    haskey(seen, x) && return nothing
+    if x isa Reactant.TracedType
+        seen[x] = true
+        push!(snaps, (x, get_mlir_data(x)))
+        return nothing
+    end
+    T = typeof(x)
+    if x isa Tuple || x isa NamedTuple
+        for i in 1:nfields(x)
+            _collect_traced_mlir_snapshots!(snaps, getfield(x, i), seen)
+        end
+    elseif x isa AbstractArray
+        if !(T <: TracedRArray) && eltype(T) !== T
+            for v in x
+                _collect_traced_mlir_snapshots!(snaps, v, seen)
+            end
+        end
+    elseif isstructtype(T) &&
+        !(x isa Union{Symbol,Module,DataType,Nothing,Missing,Core.SimpleVector})
+        seen[x] = true
+        for i in 1:nfields(x)
+            isdefined(x, i) || continue
+            _collect_traced_mlir_snapshots!(snaps, getfield(x, i), seen)
+        end
+    end
+    return nothing
+end
+
+function _restore_traced_mlir_snapshots!(snaps::Vector{Tuple{Any,Any}})
+    for (t, mlir) in snaps
+        set_mlir_data!(t, mlir)
+    end
+    return nothing
+end
+
 function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     if all(iszero ∘ ndims, args)
         scalar_args = map(args) do arg
@@ -1226,7 +1324,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     # we can expand the scope of this later to support cases where the output
     # doesn't align with `Ops.batch`. For now we just handle cases that would
     # obviously fail with scalarizing the inputs.
-    if Reactant.use_overlayed_version(f)
+    if _has_nonscalar_traced(f) || _has_nonscalar_traced_ref(args)
         return elem_apply_via_while_loop(f, args...)
     end
 
@@ -1270,10 +1368,18 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
             args[idx]
         end
 
-        if ogarg isa Base.RefValue
+        if ogarg isa Base.RefValue || (idx == 1 && fnwrap)
             continue
         end
         push!(input_shapes, size(k))
+    end
+
+    if isempty(input_shapes)
+        for arg in args
+            if !(arg isa Base.RefValue) && ndims(arg) > 0
+                push!(input_shapes, size(arg))
+            end
+        end
     end
 
     @assert length(input_shapes) > 0
@@ -1288,8 +1394,9 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
 
     for a in linear_args
         idx, path = get_argidx(a, argprefix)
+        is_fn_arg = idx == 1 && fnwrap
 
-        ogarg = if idx == 1 && fnwrap
+        ogarg = if is_fn_arg
             f
         else
             if fnwrap
@@ -1300,7 +1407,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
 
         push_val!(batch_inputs, ogarg, path[3:end])
 
-        if ogarg isa Base.RefValue
+        if ogarg isa Base.RefValue || is_fn_arg
             batch_inputs[end] =
                 (@opcall broadcast_in_dim(
                     TracedRArray(batch_inputs[end]),
@@ -1339,8 +1446,9 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
                 set!(result, path[2:end], resv)
             elseif path[1] == argprefix
                 idx = path[2]::Int
+                is_fn_arg = idx == 1 && fnwrap
 
-                ogarg = if idx == 1 && fnwrap
+                ogarg = if is_fn_arg
                     f
                 else
                     if fnwrap
@@ -1349,7 +1457,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
                     args[idx]
                 end
 
-                if ogarg isa Base.RefValue
+                if ogarg isa Base.RefValue || is_fn_arg
                     continue
                 end
 
