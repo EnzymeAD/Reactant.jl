@@ -1,7 +1,7 @@
 module TracedLinearAlgebra
 
 using ..MLIR: MLIR
-using ..Reactant: Reactant, Ops
+using ..Reactant: Reactant, Ops, TracedIndexing
 using ..Reactant:
     TracedRArray, TracedRNumber, AnyTracedRArray, AnyTracedRMatrix, AnyTracedRVector
 using ..Reactant: call_with_reactant, unwrapped_eltype, promote_to
@@ -142,26 +142,35 @@ function ReactantCore.materialize_traced_array(
     x::Hermitian{<:TracedRNumber,<:AnyTracedRMatrix}
 )
     m, n = size(x)
+    px = materialize_traced_array(parent(x))
     row_idxs = @opcall iota(Int, [m, n]; iota_dimension=1)
     col_idxs = @opcall iota(Int, [m, n]; iota_dimension=2)
     indicator = @opcall compare(
         row_idxs, col_idxs; comparison_direction=x.uplo == 'L' ? "GT" : "LT"
     )
-    x_adj = @opcall conj(@opcall transpose(parent(x), [2, 1]))
-    return @opcall select(indicator, parent(x), x_adj)
+    x_adj = @opcall conj(@opcall transpose(px, [2, 1]))
+    offdiag = @opcall select(indicator, px, x_adj)
+    if unwrapped_eltype(x) <: Complex
+        diag_ind = @opcall compare(row_idxs, col_idxs; comparison_direction="EQ")
+        px_real = @opcall real(px)
+        px_diag = @opcall complex(px_real, zero(px_real))
+        return @opcall select(diag_ind, px_diag, offdiag)
+    end
+    return offdiag
 end
 
 function ReactantCore.materialize_traced_array(
     x::Symmetric{<:TracedRNumber,<:AnyTracedRMatrix}
 )
     m, n = size(x)
+    px = materialize_traced_array(parent(x))
     row_idxs = @opcall iota(Int, [m, n]; iota_dimension=1)
     col_idxs = @opcall iota(Int, [m, n]; iota_dimension=2)
     indicator = @opcall compare(
         row_idxs, col_idxs; comparison_direction=x.uplo == 'L' ? "GT" : "LT"
     )
-    x_transposed = @opcall transpose(parent(x), [2, 1])
-    return @opcall select(indicator, parent(x), x_transposed)
+    x_transposed = @opcall transpose(px, [2, 1])
+    return @opcall select(indicator, px, x_transposed)
 end
 
 function TracedUtils.set_mlir_data!(
@@ -720,7 +729,24 @@ LinearAlgebra.adjoint!(B::AnyTracedRMatrix, A::AnyTracedRMatrix) = copy!(B, adjo
 # indexing into specific wrapepd array types
 # TODO: specialize these ones. We don't need to make the arrays dense (though our passes
 #       should be able to optimize them out)
+const WrappedLinAlgArray = Union{
+    Adjoint{<:TracedRNumber,<:AnyTracedRArray},
+    Transpose{<:TracedRNumber,<:AnyTracedRArray},
+    Diagonal{<:TracedRNumber,<:AnyTracedRVector},
+    Bidiagonal{<:TracedRNumber},
+    LowerTriangular{<:TracedRNumber},
+    UpperTriangular{<:TracedRNumber},
+    LinearAlgebra.Hermitian{<:TracedRNumber},
+    SymTridiagonal{<:TracedRNumber},
+    Tridiagonal{<:TracedRNumber},
+    Symmetric{<:TracedRNumber},
+    LinearAlgebra.UnitUpperTriangular{<:TracedRNumber},
+    LinearAlgebra.UnitLowerTriangular{<:TracedRNumber},
+    LinearAlgebra.UpperHessenberg{<:TracedRNumber},
+}
+
 for AT in (
+    Diagonal{<:TracedRNumber,<:AnyTracedRVector},
     Bidiagonal{<:TracedRNumber},
     LowerTriangular{<:TracedRNumber},
     UpperTriangular{<:TracedRNumber},
@@ -737,8 +763,16 @@ for AT in (
     end
 end
 
-_istriu(A::AnyTracedRMatrix, k) = all(iszero, overloaded_tril(A, k - 1))
-_istril(A::AnyTracedRMatrix, k) = all(iszero, overloaded_triu(A, k + 1))
+function TracedIndexing._getindex_any_traced(a::WrappedLinAlgArray, indices...)
+    return getindex(materialize_traced_array(a), indices...)
+end
+
+function _istriu(A::AnyTracedRMatrix, k)
+    return all(iszero, overloaded_tril(materialize_traced_array(A), k - 1))
+end
+function _istril(A::AnyTracedRMatrix, k)
+    return all(iszero, overloaded_triu(materialize_traced_array(A), k + 1))
+end
 
 LinearAlgebra._istriu(A::AnyTracedRMatrix, k) = _istriu(A, k)
 LinearAlgebra._istril(A::AnyTracedRMatrix, k) = _istril(A, k)

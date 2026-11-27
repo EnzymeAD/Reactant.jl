@@ -90,3 +90,16 @@ function Base.:(\)(D::Diagonal{<:TracedRNumber}, B::AnyTracedRVector)
     # isnothing(j) || throw(SingularException(j))
     return D.diag .\ B
 end
+
+const SymOrHermTraced = Union{
+    Symmetric{<:TracedRNumber,<:AnyTracedRMatrix},
+    Hermitian{<:TracedRNumber,<:AnyTracedRMatrix},
+}
+
+function Base.:(\)(A::SymOrHermTraced, B::AbstractVector)
+    return materialize_traced_array(A) \ promote_to(TracedRArray{unwrapped_eltype(B),1}, B)
+end
+
+function Base.:(\)(A::SymOrHermTraced, B::AbstractMatrix)
+    return materialize_traced_array(A) \ promote_to(TracedRArray{unwrapped_eltype(B),2}, B)
+end
