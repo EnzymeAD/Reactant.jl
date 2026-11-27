@@ -1,4 +1,4 @@
-using Reactant, Test
+using Reactant, Test, LinearAlgebra
 using Reactant:
     traced_type,
     TracedRArray,
@@ -559,4 +559,39 @@ reflect_hasfield(x) = x .+ hasfield(KindOptions, :a)
     @test @jit(reflect_nameof(x)) ≈ [1.0 + length("KindOptions")]
     @test @jit(reflect_parentmodule(x)) ≈ [1.0 + length(string(@__MODULE__))]
     @test @jit(reflect_hasfield(x)) ≈ [2.0]
+end
+
+struct CustomLayer2356{W,B}
+    w::W
+    b::B
+end
+
+function test_mul_2356(A, x)
+    output = Reactant.to_rarray(zeros(Float32, size(A, 1), size(x, 2)))
+    LinearAlgebra.mul!(output, A, x)
+    return output
+end
+
+function test_identity_1315(A, n)
+    A2 = Reactant.to_rarray(A)
+    n_untracked = Reactant.to_rarray(3.0f0)
+    n_tracked = Reactant.to_rarray(4.0f0; track_numbers=true)
+    n2 = Reactant.to_rarray(n; track_numbers=true)
+    layer = Reactant.to_rarray(CustomLayer2356(ones(Float32, 2, 2), Float32[1, 2]))
+    mask = Reactant.to_rarray(BitVector([true, false]))
+    return A2 .+ n_untracked .+ n_tracked .+ n2 .+ sum(layer.w) .+ sum(layer.b) .+ sum(mask)
+end
+
+@testset "Reactant.to_rarray inside @compile (#2356, #1315)" begin
+    A_h = rand(Float32, 8, 12)
+    x_h = rand(Float32, 12, 3)
+    A_ra = Reactant.to_rarray(A_h)
+    x_ra = Reactant.to_rarray(x_h)
+    res = @jit test_mul_2356(A_ra, x_ra)
+    @test Array(res) ≈ A_h * x_h
+
+    v_ra = Reactant.to_rarray(Float32[10, 20])
+    n_ra = Reactant.ConcreteRNumber(5.0f0)
+    res2 = @jit test_identity_1315(v_ra, n_ra)
+    @test Array(res2) ≈ Float32[30, 40]
 end
