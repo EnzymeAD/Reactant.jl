@@ -321,6 +321,26 @@ accum_fn(x, y) = abs2(x) + abs2(y)
             z
         end ≈ accumulate(accum_fn, b; dims=3, init=0.0f0) broken = RunningOnTPU
     end
+
+    @testset "widening cumsum / cumprod (#3525)" begin
+        x_i32 = Int32[5, 12, 3]
+        x_i32_ra = Reactant.to_rarray(x_i32)
+        cs_i32 = @jit cumsum(x_i32_ra)
+        @test eltype(cs_i32) == eltype(cumsum(x_i32))
+        @test Array(cs_i32) == cumsum(x_i32)
+
+        cp_i32 = @jit cumprod(x_i32_ra)
+        @test eltype(cp_i32) == eltype(cumprod(x_i32))
+        @test Array(cp_i32) == cumprod(x_i32)
+
+        m_i32 = Int32[1 2 3; 4 5 6]
+        m_i32_ra = Reactant.to_rarray(m_i32)
+        @test Array(@jit cumsum(m_i32_ra; dims=2)) == cumsum(m_i32; dims=2)
+
+        x_bool = Bool[true, false, true, true]
+        x_bool_ra = Reactant.to_rarray(x_bool)
+        @test Array(@jit cumsum(x_bool_ra)) == cumsum(x_bool)
+    end
 end
 
 sameunitrange(x, y) = first(x) == first(y) && last(x) == last(y)

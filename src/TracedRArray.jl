@@ -1076,12 +1076,16 @@ end
 function scan_impl!(
     op,
     output::AnyTracedRArray{T,N},
-    input::AnyTracedRArray{T,N};
+    input::AnyTracedRArray{T_in,N};
     dims::Integer,
     init=Base._InitialValue(),
-) where {T,N}
+) where {T,T_in,N}
     @assert dims > 0 "dims must be a positive integer"
     @assert axes(output) == axes(input) "output and input must have the same shape"
+
+    if T_in !== T
+        input = T.(input)
+    end
 
     dims > ndims(input) && return copyto!(output, input)
 
@@ -1109,7 +1113,7 @@ function scan_impl!(
     end
 
     init = something(init) # unwrap Some
-    init = Reactant.promote_to(TracedRNumber{unwrapped_eltype(init)}, init)
+    init = Reactant.promote_to(TracedRNumber{unwrapped_eltype(input)}, init)
 
     window_dimensions = ones(Int64, N)
     window_dimensions[dims] = size(input, dims)
