@@ -83,6 +83,85 @@ end
     @test C_ra ≈ C atol = 1e-3 rtol = 1e-2
 end
 
+mat_exp_1565(A) = exp(A)
+function mat_exp_inplace_1565(A)
+    B = copy(A)
+    LinearAlgebra.exp!(B)
+    return B
+end
+mat_exp_adj_1565(A) = exp(A')
+mat_exp_trans_1565(A) = exp(transpose(A))
+mat_exp_sym_1565(A) = parent(exp(Symmetric(A)))
+mat_exp_herm_1565(A) = parent(exp(Hermitian(A)))
+mat_cis_1565(A) = cis(A)
+mat_pow_e_1565(A) = ℯ^A
+
+@testset "Matrix Exponential (#1565)" begin
+    @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
+        (T == Float64 || T == ComplexF64) && RunningOnTPU && continue
+        rtol = real(T) == Float32 ? 1.0f-3 : 1e-10
+
+        # Zero, small-norm, moderate-norm, and large-norm (requires scaling & squaring)
+        for scale in (0.0, 0.2, 1.5, 12.0)
+            base_re = reshape(
+                real(T)[0.3, -0.4, 0.2, 0.1, -0.5, 0.6, -0.2, 0.3, -0.1], 3, 3
+            )
+            A = if T <: Real
+                base_re .* real(T)(scale)
+            else
+                base_im = reshape(
+                    real(T)[-0.2, 0.1, 0.5, -0.3, 0.2, -0.4, 0.3, -0.1, 0.2], 3, 3
+                )
+                (base_re .+ im .* base_im) .* real(T)(scale)
+            end
+            A_ra = Reactant.to_rarray(A)
+            @test Array(@jit(mat_exp_1565(A_ra))) ≈ exp(A) rtol = rtol atol = 1e-5
+            @test Array(@jit(mat_exp_inplace_1565(A_ra))) ≈ exp(A) rtol = rtol atol = 1e-5
+        end
+
+        A1 = fill(T(0.75), 1, 1)
+        @test Array(@jit(mat_exp_1565(Reactant.to_rarray(A1)))) ≈ exp(A1) rtol = rtol
+
+        A3 = if T <: Real
+            reshape(T[0.2, -0.3, 0.1, 0.4, -0.1, 0.5, -0.2, 0.3, 0.1], 3, 3)
+        else
+            reshape(
+                T[
+                    0.2 + 0.1im,
+                    -0.3 + 0.2im,
+                    0.1 - 0.1im,
+                    0.4 - 0.2im,
+                    -0.1 + 0.3im,
+                    0.5 + 0.1im,
+                    -0.2 - 0.1im,
+                    0.3 + 0.2im,
+                    0.1 - 0.3im,
+                ],
+                3,
+                3,
+            )
+        end
+        A3_ra = Reactant.to_rarray(A3)
+        @test Array(@jit(mat_exp_adj_1565(A3_ra))) ≈ exp(A3') rtol = rtol atol = 1e-5
+        @test Array(@jit(mat_exp_trans_1565(A3_ra))) ≈ exp(transpose(A3)) rtol = rtol atol =
+            1e-5
+        if T <: Real
+            @test Array(@jit(mat_exp_sym_1565(A3_ra))) ≈ Matrix(exp(Symmetric(A3))) rtol =
+                rtol atol = 1e-5
+        end
+        @test Array(@jit(mat_exp_herm_1565(A3_ra))) ≈ Matrix(exp(Hermitian(A3))) rtol = rtol atol =
+            1e-5
+    end
+
+    # Integer matrix input, cis(A), and ℯ^A
+    A_int = [1 2; 0 -1]
+    @test Array(@jit(mat_exp_1565(Reactant.to_rarray(A_int)))) ≈ exp(A_int) rtol = 1e-5
+    A_f32 = Float32[0.2 -0.3; 0.4 0.1]
+    A_f32_ra = Reactant.to_rarray(A_f32)
+    @test Array(@jit(mat_cis_1565(A_f32_ra))) ≈ cis(A_f32) rtol = 1.0f-3 atol = 1e-5
+    @test Array(@jit(mat_pow_e_1565(A_f32_ra))) ≈ (ℯ^A_f32) rtol = 1.0f-3 atol = 1e-5
+end
+
 function do_mul_view!(data_3d, A, B)
     C = view(data_3d, :, :, 1)
     mul!(C, A, B)
