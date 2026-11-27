@@ -314,22 +314,92 @@ function Base.similar(
 end
 
 function Base.similar(
-    ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{<:TracedRNumber{T}}, dims
+    ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{TracedRNumber{T}}, dims
 ) where {T<:Reactant.ReactantPrimitive,N}
     @assert N isa Int
     return (@opcall fill(zero(T), dims))::TracedRArray{T,N}
 end
 
+function Base.similar(
+    ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{Union{T,TracedRNumber{T}}}, dims
+) where {T<:Reactant.ReactantPrimitive,N}
+    @assert N isa Int
+    return (@opcall fill(zero(T), dims))::TracedRArray{T,N}
+end
+
+function Base.similar(
+    ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
+) where {T,N}
+    @assert N isa Int
+    return Array{T,N}(undef, length.(dims))
+end
+
 function Base.copy(bc::Broadcasted{<:AbstractReactantArrayStyle{0}})
-    ElType = Broadcast.combine_eltypes(bc.f, bc.args)
-    dest = copyto!(similar(bc, ElType), bc)
-    return dest[CartesianIndex()]  # 0D broadcast needs to unwrap results
+    dest = _copy(bc)
+    return @allowscalar dest[CartesianIndex()]  # 0D broadcast needs to unwrap results
 end
 
 Base.eltype(::Broadcast.Extruded{T}) where {T} = eltype(T)
 
 first_scalar(x) = @allowscalar first(x)
 first_scalar(x::Broadcast.Extruded) = first_scalar(x.x)
+
+function _unbatch_soa_element(x::TracedRArray, I, out_size)
+    return size(x) == out_size ? (@allowscalar x[I]) : x
+end
+function _unbatch_soa_element(x::Tuple, I, out_size)
+    isempty(x) && return ()
+    return (
+        _unbatch_soa_element(first(x), I, out_size),
+        _unbatch_soa_element(Base.tail(x), I, out_size)...,
+    )
+end
+function _unbatch_soa_element(x::NamedTuple{K}, I, out_size) where {K}
+    return NamedTuple{K}(_unbatch_soa_element(Tuple(x), I, out_size))
+end
+function _unbatch_soa_element(x, I, out_size)
+    T = Core.Typeof(x)
+    if !isstructtype(T) || ismutabletype(T) || x isa Type || fieldcount(T) == 0
+        return x
+    end
+    nf = fieldcount(T)
+    flds = Vector{Any}(undef, nf)
+    changed = false
+    for k in 1:nf
+        isdefined(x, k) || return x
+        fk = getfield(x, k)
+        fk2 = _unbatch_soa_element(fk, I, out_size)
+        changed |= (fk !== fk2)
+        flds[k] = fk2
+    end
+    changed || return x
+    return T.name.wrapper(flds...)
+end
+
+function _materialize_broadcast_result(res, out_size::NTuple{N,Int}) where {N}
+    if res isa TracedRArray
+        return res
+    elseif res isa TracedRNumber
+        return N == 0 ? fill(res) : Reactant.broadcast_to_size(res, out_size)
+    elseif res isa Number && typeof(res) <: Reactant.ReactantPrimitive
+        tnum = Reactant.promote_to(TracedRNumber{typeof(res)}, res)
+        return N == 0 ? fill(tnum) : Reactant.broadcast_to_size(tnum, out_size)
+    elseif res isa Array
+        return res
+    elseif N == 0
+        out0 = Array{Core.Typeof(res),0}(undef, ())
+        out0[CartesianIndex()] = res
+        return out0
+    end
+    first_I = CartesianIndex(ntuple(Returns(1), Val(N)))
+    first_elem = _unbatch_soa_element(res, first_I, out_size)
+    ElemT = Core.Typeof(first_elem)
+    out = Array{ElemT,N}(undef, out_size)
+    for I in CartesianIndices(out)
+        out[I] = _unbatch_soa_element(res, I, out_size)
+    end
+    return out
+end
 
 # we need to override the outer copy method to make sure we never fall back to scalar
 # iteration (see, e.g., CUDA.jl#145)
@@ -340,6 +410,19 @@ function _copy(bc)
         bc.f
     end
     ElType = Broadcast.combine_eltypes(fn, bc.args)
+    if ElType === Union{} ||
+        ElType == Any ||
+        ElType == TracedRNumber ||
+        !isconcretetype(ElType)
+        bc_inst = Broadcast.instantiate(bc)
+        out_size = length.(axes(bc_inst))
+        if prod(out_size) > 0
+            bc_prep = Broadcast.preprocess(nothing, bc_inst)
+            args = _broadcast_args_to_size(bc_prep.args, out_size)
+            res = TracedUtils.elem_apply(bc_prep.f, args...)
+            return _materialize_broadcast_result(res, out_size)
+        end
+    end
     # Special case a union{} return so we can see the better error message
     if ElType === Union{} || ElType == Any || ElType == TracedRNumber
         ElType = Core.Typeof(fn(map(first_scalar, bc.args)...))
@@ -416,12 +499,24 @@ function Base.copyto!(dest::AnyTracedRArray, src::Array)
     return copyto!(dest, Reactant.promote_to(TracedRArray, src))
 end
 
+_broadcast_args_to_size(::Tuple{}, _) = ()
+function _broadcast_args_to_size(args::Tuple, sz)
+    return (
+        Reactant.broadcast_to_size(Base.materialize(first(args)), sz),
+        _broadcast_args_to_size(Base.tail(args), sz)...,
+    )
+end
+
+function Base.copyto!(dest::Array, bc::Broadcasted{<:AbstractReactantArrayStyle})
+    return _copyto!(dest, bc)
+end
+
 function _copyto!(dest::AnyTracedRArray, bc::Broadcasted)
     axes(dest) == axes(bc) || Broadcast.throwdm(axes(dest), axes(bc))
     isempty(dest) && return dest
     bc = Broadcast.preprocess(dest, bc)
 
-    args = (Reactant.broadcast_to_size(Base.materialize(a), size(bc)) for a in bc.args)
+    args = _broadcast_args_to_size(bc.args, size(bc))
 
     res0 = TracedUtils.elem_apply(bc.f, args...)
     if !(res0 isa Reactant.TracedType)
@@ -429,6 +524,8 @@ function _copyto!(dest::AnyTracedRArray, bc::Broadcasted)
         if res0 isa Number
             res0 = Reactant.promote_to(TracedRNumber{unwrapped_eltype(dest)}, res0)
         end
+        res0 = Reactant.broadcast_to_size(res0, size(dest))
+    elseif res0 isa TracedRNumber
         res0 = Reactant.broadcast_to_size(res0, size(dest))
     end
     res = Reactant.promote_to(TracedRArray{unwrapped_eltype(dest),ndims(dest)}, res0)
@@ -442,7 +539,7 @@ function _copyto!(dest::Array{<:TracedRNumber}, bc::Broadcasted)
 
     bc = Broadcast.preprocess(dest, bc)
 
-    args = (Reactant.broadcast_to_size(Base.materialize(a), size(bc)) for a in bc.args)
+    args = _broadcast_args_to_size(bc.args, size(bc))
 
     res = TracedUtils.elem_apply(bc.f, args...)
     if !(res isa Reactant.TracedType)
@@ -450,6 +547,31 @@ function _copyto!(dest::Array{<:TracedRNumber}, bc::Broadcasted)
             res = Reactant.promote_to(TracedRNumber{unwrapped_eltype(dest)}, res)
         end
         res = Reactant.broadcast_to_size(res, size(dest))
+    elseif res isa TracedRNumber
+        res = Reactant.broadcast_to_size(res, size(dest))
+    end
+    for I in 1:length(dest)
+        dest[I] = @allowscalar res[I]
+    end
+    return dest
+end
+
+function _copyto!(dest::Array, bc::Broadcasted)
+    axes(dest) == axes(bc) || Broadcast.throwdm(axes(dest), axes(bc))
+    isempty(dest) && return dest
+    bc = Broadcast.preprocess(dest, bc)
+    out_size = size(bc)
+    args = _broadcast_args_to_size(bc.args, out_size)
+    res = TracedUtils.elem_apply(bc.f, args...)
+    if ndims(dest) == 0
+        dest[CartesianIndex()] = res
+        return dest
+    end
+    if !(res isa AbstractArray)
+        for I in CartesianIndices(dest)
+            dest[I] = _unbatch_soa_element(res, I, out_size)
+        end
+        return dest
     end
     for I in 1:length(dest)
         dest[I] = @allowscalar res[I]
