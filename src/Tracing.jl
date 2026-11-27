@@ -800,8 +800,8 @@ Base.@nospecializeinfer function traced_type_inner(
     if fieldcount(T) == fieldcount(TT2)
         legal = true
 
-        skipfield = false
         for f in 1:fieldcount(T)
+            skipfield = false
             def_ft = fieldtype(generic_T, f)
             field_tvars = Base.IdSet{TypeVar}()
             collect_tvars_in_type!(field_tvars, def_ft)
@@ -1267,6 +1267,91 @@ Base.@nospecializeinfer function make_tracer_via_immutable_constructor(
     return y
 end
 
+Base.@nospecializeinfer function _reconcile_tracer_field!(
+    seen, @nospecialize(xi2), @nospecialize(FT), @nospecialize(newpath)
+)
+    if Core.Typeof(xi2) <: FT
+        return xi2, false, true
+    end
+    if is_traced_number(FT) && xi2 isa unwrapped_eltype(FT)
+        wrapped = FT(xi2)
+        wrapped = Core.Typeof(wrapped)((newpath,), wrapped.mlir_data)
+        seen[wrapped] = wrapped
+        return wrapped, true, true
+    end
+    if FT <: Tuple && xi2 isa Tuple && fieldcount(FT) == length(xi2)
+        nf_sub = length(xi2)
+        flds_sub = Vector{Any}(undef, nf_sub)
+        for j in 1:nf_sub
+            val_j, _, ok = _reconcile_tracer_field!(
+                seen, xi2[j], fieldtype(FT, j), append_path(newpath, j)
+            )
+            ok || return xi2, false, false
+            flds_sub[j] = val_j
+        end
+        return Tuple(flds_sub), true, true
+    end
+    X2T = Core.Typeof(xi2)
+    if Base.isconcretetype(FT) &&
+        !isprimitivetype(FT) &&
+        !(FT <: Array) &&
+        FT.name === X2T.name &&
+        fieldcount(FT) == fieldcount(X2T)
+        if ismutabletype(X2T) && haskey(seen, xi2)
+            cached = seen[xi2]
+            if Core.Typeof(cached) <: FT
+                return cached, true, true
+            end
+        end
+        nf_sub = fieldcount(FT)
+        if ismutabletype(FT)
+            y_sub = ccall(:jl_new_struct_uninit, Any, (Any,), FT)
+            if ismutabletype(X2T)
+                seen[xi2] = y_sub
+            end
+            for j in 1:nf_sub
+                if isdefined(xi2, j)
+                    val_j, _, ok = _reconcile_tracer_field!(
+                        seen, getfield(xi2, j), fieldtype(FT, j), append_path(newpath, j)
+                    )
+                    if !ok || !(Core.Typeof(val_j) <: fieldtype(FT, j))
+                        if ismutabletype(X2T)
+                            seen[xi2] = xi2
+                        end
+                        return xi2, false, false
+                    end
+                    ccall(
+                        :jl_set_nth_field, Cvoid, (Any, Csize_t, Any), y_sub, j - 1, val_j
+                    )
+                end
+            end
+            return y_sub, true, true
+        else
+            flds_sub = Vector{Any}(undef, nf_sub)
+            def_nf = nf_sub
+            for j in 1:nf_sub
+                if isdefined(xi2, j)
+                    val_j, _, ok = _reconcile_tracer_field!(
+                        seen, getfield(xi2, j), fieldtype(FT, j), append_path(newpath, j)
+                    )
+                    if !ok || !(Core.Typeof(val_j) <: fieldtype(FT, j))
+                        return xi2, false, false
+                    end
+                    flds_sub[j] = val_j
+                else
+                    def_nf = j - 1
+                    break
+                end
+            end
+            y_sub = ccall(
+                :jl_new_structv, Any, (Any, Ptr{Any}, UInt32), FT, flds_sub, def_nf
+            )
+            return y_sub, true, true
+        end
+    end
+    return xi2, false, false
+end
+
 Base.@nospecializeinfer function make_tracer_unknown(
     seen,
     @nospecialize(prev),
@@ -1303,13 +1388,36 @@ Base.@nospecializeinfer function make_tracer_unknown(
         return prev
     end
 
+    if mode == TracedToTypes
+        if nf == 0
+            push!(path, prev)
+            return nothing
+        end
+        for i in 1:nf
+            if isdefined(prev, i)
+                xi = Base.getfield(prev, i)
+                make_tracer(
+                    seen,
+                    xi,
+                    path,
+                    mode;
+                    track_numbers,
+                    sharding=Base.getproperty(sharding, i),
+                    runtime,
+                    kwargs...,
+                )
+            end
+        end
+        return nothing
+    end
+
     if ismutabletype(TT)
         y = ccall(:jl_new_struct_uninit, Any, (Any,), TT)
         seen[prev] = y
         changed = false
         for i in 1:nf
             if isdefined(prev, i)
-                newpath = mode == TracedToTypes ? path : append_path(path, i)
+                newpath = append_path(path, i)
                 xi = Base.getfield(prev, i)
                 xi2 = make_tracer(
                     seen,
@@ -1324,6 +1432,22 @@ Base.@nospecializeinfer function make_tracer_unknown(
                 if xi !== xi2
                     changed = true
                 end
+                FT = fieldtype(TT, i)
+                if !(Core.Typeof(xi2) <: FT)
+                    xi2_rec, rec_changed, ok = _reconcile_tracer_field!(
+                        seen, xi2, FT, newpath
+                    )
+                    if !ok || !(Core.Typeof(xi2_rec) <: FT)
+                        seen[prev] = prev
+                        throw(
+                            AssertionError(
+                                "Could not recursively make tracer of object of type $RT into $TT at field $i (named $(fieldname(TT, i))), need object of type $FT found object of type $(Core.Typeof(xi2)) ",
+                            ),
+                        )
+                    end
+                    xi2 = xi2_rec
+                    changed |= rec_changed
+                end
                 ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), y, i - 1, xi2)
             end
         end
@@ -1335,10 +1459,6 @@ Base.@nospecializeinfer function make_tracer_unknown(
     end
 
     if nf == 0
-        if mode == TracedToTypes
-            push!(path, prev)
-            return nothing
-        end
         return prev
     end
 
@@ -1346,7 +1466,7 @@ Base.@nospecializeinfer function make_tracer_unknown(
     changed = false
     for i in 1:nf
         if isdefined(prev, i)
-            newpath = mode == TracedToTypes ? path : append_path(path, i)
+            newpath = append_path(path, i)
             xi = Base.getfield(prev, i)
             xi2 = make_tracer(
                 seen,
@@ -1362,72 +1482,23 @@ Base.@nospecializeinfer function make_tracer_unknown(
                 changed = true
             end
             FT = fieldtype(TT, i)
-            if mode != TracedToTypes && !(Core.Typeof(xi2) <: FT)
-                if is_traced_number(FT) && xi2 isa unwrapped_eltype(FT)
-                    xi2 = FT(xi2)
-                    xi2 = Core.Typeof(xi2)((newpath,), xi2.mlir_data)
-                    seen[xi2] = xi2
-                    changed = true
-                elseif !ismutabletype(FT) &&
-                    !ismutabletype(Core.Typeof(xi2)) &&
-                    fieldcount(FT) == fieldcount(Core.Typeof(xi2))
-                    # Attempt to reconcile struct mismatch (e.g. Foo{Float64} -> Foo{TracedRNumber})
-                    # arising from parent type constraints overriding local inference.
-                    local flds_sub = Vector{Any}(undef, fieldcount(FT))
-                    local success = true
-                    for j in 1:fieldcount(FT)
-                        val_j = getfield(xi2, j)
-                        ft_j = fieldtype(FT, j)
-                        if val_j isa ft_j
-                            flds_sub[j] = val_j
-                        elseif is_traced_number(ft_j) && val_j isa unwrapped_eltype(ft_j)
-                            val_wrapped = ft_j(val_j)
-                            # Correct the path for the wrapped scalar
-                            sub_path = append_path(newpath, j)
-                            val_wrapped = Core.Typeof(val_wrapped)(
-                                (sub_path,), val_wrapped.mlir_data
-                            )
-                            seen[val_wrapped] = val_wrapped
-                            flds_sub[j] = val_wrapped
-                        else
-                            success = false
-                            break
-                        end
-                    end
-
-                    if success
-                        xi2 = ccall(
-                            :jl_new_structv,
-                            Any,
-                            (Any, Ptr{Any}, UInt32),
-                            FT,
-                            flds_sub,
-                            fieldcount(FT),
-                        )
-                        changed = true
-                    else
-                        throw(
-                            AssertionError(
-                                "Could not recursively make tracer of object of type $RT into $TT at field $i (named $(fieldname(TT, i))), need object of type $FT found object of type $(Core.Typeof(xi2)) ",
-                            ),
-                        )
-                    end
-                else
+            if !(Core.Typeof(xi2) <: FT)
+                xi2_rec, rec_changed, ok = _reconcile_tracer_field!(seen, xi2, FT, newpath)
+                if !ok || !(Core.Typeof(xi2_rec) <: FT)
                     throw(
                         AssertionError(
                             "Could not recursively make tracer of object of type $RT into $TT at field $i (named $(fieldname(TT, i))), need object of type $FT found object of type $(Core.Typeof(xi2)) ",
                         ),
                     )
                 end
+                xi2 = xi2_rec
+                changed |= rec_changed
             end
             flds[i] = xi2
         else
             nf = i - 1 # rest of tail must be undefined values
             break
         end
-    end
-    if mode == TracedToTypes
-        return nothing
     end
     if !changed
         seen[prev] = prev
