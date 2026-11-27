@@ -179,6 +179,53 @@ function get_svd_algorithms(backend::String, size=nothing)
     return algorithms
 end
 
+solve_with_cholesky_inplace!(A, b) = cholesky!(A) \ b
+solve_with_cholesky_sym_lower(A, b) = cholesky(Symmetric(A, :L)) \ b
+function cholesky_inplace_factors!(A)
+    C = cholesky!(A)
+    return C.factors
+end
+function cholesky_sym_lower_inplace!(A)
+    C = cholesky!(Symmetric(A, :L))
+    return C.factors
+end
+
+@testset "Cholesky cholcopy & cholesky! (#2258)" begin
+    # Integer input succeeds for out-of-place `cholesky` via `cholcopy`, fails for `cholesky!`
+    A_int = [4 2; 2 5]
+    b_fl = [6.0, 7.0]
+    A_int_ra = Reactant.to_rarray(A_int)
+    b_fl_ra = Reactant.to_rarray(b_fl)
+    @test Array(@jit(solve_with_cholesky(A_int_ra, b_fl_ra))) ≈ cholesky(A_int) \ b_fl
+    @test Array(A_int_ra) == A_int
+    @test_throws InexactError @jit(cholesky_inplace_factors!(A_int_ra))
+
+    # Out-of-place `cholesky` preserves input; in-place `cholesky!` overwrites active triangle
+    A_f64 = [4.0 2.0; 2.0 5.0]
+    A_out_ra = Reactant.to_rarray(copy(A_f64))
+    @test Array(@jit(solve_with_cholesky(A_out_ra, b_fl_ra))) ≈ cholesky(A_f64) \ b_fl
+    @test Array(A_out_ra) ≈ A_f64
+
+    A_in_cpu = copy(A_f64)
+    cholesky!(A_in_cpu)
+    A_in_ra = Reactant.to_rarray(copy(A_f64))
+    @test Array(@jit(cholesky_inplace_factors!(A_in_ra))) ≈ A_in_cpu
+    @test Array(A_in_ra) ≈ A_in_cpu
+
+    # Symmetric(..., :L) reads only lower triangle and writes lower factor in-place
+    A_low_only = [4.0 999.0; 2.0 5.0]
+    A_low_ra = Reactant.to_rarray(copy(A_low_only))
+    @test Array(@jit(solve_with_cholesky_sym_lower(A_low_ra, b_fl_ra))) ≈
+        cholesky(Symmetric(A_low_only, :L)) \ b_fl
+    @test Array(A_low_ra) == A_low_only
+
+    A_low_in_cpu = copy(A_low_only)
+    cholesky!(Symmetric(A_low_in_cpu, :L))
+    A_low_in_ra = Reactant.to_rarray(copy(A_low_only))
+    @test Array(@jit(cholesky_sym_lower_inplace!(A_low_in_ra))) ≈ A_low_in_cpu
+    @test Array(A_low_in_ra) ≈ A_low_in_cpu
+end
+
 least_squares_with_svd(A, b, full, alg) = svd(A; full, alg) \ b
 
 function compute_ls_solution_error(A, sol, b, bsize)
