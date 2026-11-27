@@ -1474,6 +1474,7 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(path),
     mode;
     @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(runtime = nothing),
     @nospecialize(device = nothing),
     @nospecialize(client = nothing),
     kwargs...,
@@ -1481,7 +1482,11 @@ Base.@nospecializeinfer function make_tracer(
     if mode == TracedToTypes
         throw("Cannot have ConcretePJRTArray as function call argument.")
     end
-    mode == ArrayToConcrete && return ConcretePJRTArray(prev; sharding, device, client)
+    if mode == ArrayToConcrete
+        runtime isa Val{:IFRT} &&
+            return ConcreteIFRTArray(convert(Array{T,N}, prev); sharding, device, client)
+        return ConcretePJRTArray(prev; sharding, device, client)
+    end
     mode != ConcreteToTraced && throw("Cannot trace concrete")
     haskey(seen, prev) && return seen[prev]::TracedRArray{T,N}
     res = TracedRArray{T,N}((path,), nothing, size(prev))
@@ -1495,6 +1500,7 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(path),
     mode;
     @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(runtime = nothing),
     @nospecialize(device = nothing),
     @nospecialize(client = nothing),
     kwargs...,
@@ -1502,7 +1508,11 @@ Base.@nospecializeinfer function make_tracer(
     if mode == TracedToTypes
         throw("Cannot have ConcreteIFRTArray as function call argument.")
     end
-    mode == ArrayToConcrete && return ConcreteIFRTArray(prev; sharding, device, client)
+    if mode == ArrayToConcrete
+        runtime isa Val{:PJRT} &&
+            return ConcretePJRTArray(convert(Array{T,N}, prev); sharding, device, client)
+        return ConcreteIFRTArray(prev; sharding, device, client)
+    end
     mode != ConcreteToTraced && throw("Cannot trace concrete")
     haskey(seen, prev) && return seen[prev]::TracedRArray{T,N}
     res = TracedRArray{T,N}((path,), nothing, size(prev))
@@ -1516,6 +1526,7 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(path),
     mode;
     @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(runtime = nothing),
     @nospecialize(device = nothing),
     @nospecialize(client = nothing),
     kwargs...,
@@ -1523,7 +1534,11 @@ Base.@nospecializeinfer function make_tracer(
     if mode == TracedToTypes
         throw("Cannot have ConcretePJRTNumber as function call argument.")
     end
-    mode == ArrayToConcrete && return ConcretePJRTNumber(prev; sharding, device, client)
+    if mode == ArrayToConcrete
+        runtime isa Val{:IFRT} &&
+            return ConcreteIFRTNumber{T}(to_number(prev); sharding, device, client)
+        return ConcretePJRTNumber(prev; sharding, device, client)
+    end
     mode != ConcreteToTraced && throw("Cannot trace existing trace type")
     haskey(seen, prev) && return seen[prev]::TracedRNumber{T}
     res = TracedRNumber{T}((path,), nothing)
@@ -1537,6 +1552,7 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(path),
     mode;
     @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(runtime = nothing),
     @nospecialize(device = nothing),
     @nospecialize(client = nothing),
     kwargs...,
@@ -1544,7 +1560,11 @@ Base.@nospecializeinfer function make_tracer(
     if mode == TracedToTypes
         throw("Cannot have ConcreteIFRTNumber as function call argument.")
     end
-    mode == ArrayToConcrete && return ConcreteIFRTNumber(prev; sharding, device, client)
+    if mode == ArrayToConcrete
+        runtime isa Val{:PJRT} &&
+            return ConcretePJRTNumber{T}(to_number(prev); sharding, device, client)
+        return ConcreteIFRTNumber(prev; sharding, device, client)
+    end
     mode != ConcreteToTraced && throw("Cannot trace existing trace type")
     haskey(seen, prev) && return seen[prev]::TracedRNumber{T}
     res = TracedRNumber{T}((path,), nothing)
@@ -2256,7 +2276,17 @@ become compile-time constants.
     device=nothing,
     client=nothing,
 )
-    runtime === nothing && (runtime = XLA.runtime())
+    if runtime === nothing
+        if client !== nothing
+            runtime = XLA.runtime(client)
+        elseif device !== nothing
+            runtime = XLA.runtime(XLA.client(device))
+        else
+            inferred_client = _infer_client_from_args(x; throw_on_conflict=false)
+            runtime =
+                inferred_client === nothing ? XLA.runtime() : XLA.runtime(inferred_client)
+        end
+    end
     track_numbers isa Bool && (track_numbers = track_numbers ? Number : Union{})
     return to_rarray_internal(x, track_numbers, sharding, runtime, device, client)
 end
