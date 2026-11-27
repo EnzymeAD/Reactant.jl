@@ -254,13 +254,28 @@ function Base.mapreducedim!(
     A::Base.AbstractArrayOrBroadcasted,
 ) where {T,N}
     @assert length(size(R)) == length(size(A))
-    dims = map(enumerate(zip(size(R), size(A)))) do (i, (sR, sA))
-        sR == sA && return nothing
-        @assert sR == 1
-        return i
+    dims = Int[]
+    for i in 1:N
+        sR = size(R, i)
+        sA = size(A, i)
+        if sR != sA
+            @assert sR == 1
+            push!(dims, i)
+        end
     end
-    tmp = mapreduce(f, op, A; dims=filter(!isnothing, dims))
-    copyto!(R, op.(R, tmp))
+    A_mat = A isa Broadcast.Broadcasted ? Base.materialize(A) : A
+    if isempty(dims)
+        fA = Base.materialize(Reactant.call_with_reactant(Broadcast.broadcasted, f, A_mat))
+        copyto!(
+            R,
+            Base.materialize(Reactant.call_with_reactant(Broadcast.broadcasted, op, R, fA)),
+        )
+        return R
+    end
+    tmp = overloaded_mapreduce(f, op, A_mat; dims)
+    copyto!(
+        R, Base.materialize(Reactant.call_with_reactant(Broadcast.broadcasted, op, R, tmp))
+    )
     return R
 end
 
