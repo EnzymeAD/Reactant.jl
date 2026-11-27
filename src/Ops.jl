@@ -3565,6 +3565,275 @@ Produces a [`Reactant.MLIR.Dialects.sdy.sharding_constraint`](@ref) operation wi
     end
 end
 
+function _guaranteed_attr(ctx::MLIR.IR.Context, state::Core.Bool)
+    enum_val = if state
+        MLIR.API.ENZYMEXLA_GUARANTEED_ANALYSIS_RESULT_GUARANTEED
+    else
+        MLIR.API.ENZYMEXLA_GUARANTEED_ANALYSIS_RESULT_NOTGUARANTEED
+    end
+    return MLIR.IR.Attribute(
+        MLIR.API.enzymexlaGuaranteedAnalysisResultAttrGet(ctx, enum_val)
+    )
+end
+
+function _unknown_guaranteed_attr(ctx::MLIR.IR.Context)
+    return MLIR.IR.Attribute(
+        MLIR.API.enzymexlaGuaranteedAnalysisResultAttrGet(
+            ctx, MLIR.API.ENZYMEXLA_GUARANTEED_ANALYSIS_RESULT_UNKNOWN
+        ),
+    )
+end
+
+function _value_has_no_uses(val::MLIR.IR.Value)
+    return MLIR.IR.mlirIsNull(MLIR.API.mlirValueGetFirstUse(val))
+end
+
+function _value_only_used_by_op(val::MLIR.IR.Value, target_op::MLIR.IR.Operation)
+    u = MLIR.API.mlirValueGetFirstUse(val)
+    MLIR.IR.mlirIsNull(u) && return false
+    owner = MLIR.API.mlirOpOperandGetOwner(u)
+    MLIR.API.mlirOperationEqual(owner, target_op) || return false
+    return MLIR.IR.mlirIsNull(MLIR.API.mlirOpOperandGetNextUse(u))
+end
+
+function _set_op_guaranteed_attrs!(
+    op::MLIR.IR.Operation, res_idx::Integer, attr_pairs::Vector{Pair{String,Core.Bool}}
+)
+    ctx = MLIR.IR.current_context()
+    nres = MLIR.IR.nresults(op)
+    unk_attr = _unknown_guaranteed_attr(ctx)
+    for (attr_name, state) in attr_pairs
+        g_attr = _guaranteed_attr(ctx, state)
+        existing = MLIR.IR.getattr(op, attr_name)
+        has_valid_existing =
+            existing !== nothing &&
+            MLIR.IR.isarray(existing) &&
+            MLIR.API.mlirArrayAttrGetNumElements(existing) == nres
+        raw_attrs = Vector{MLIR.API.MlirAttribute}(undef, nres)
+        for i in 1:nres
+            if i == res_idx + 1
+                raw_attrs[i] = g_attr.ref
+            elseif has_valid_existing
+                raw_attrs[i] = MLIR.API.mlirArrayAttrGetElement(existing, i - 1)
+            else
+                raw_attrs[i] = unk_attr.ref
+            end
+        end
+        arr_attr = MLIR.IR.Attribute(MLIR.API.mlirArrayAttrGet(ctx, nres, raw_attrs))
+        MLIR.IR.setattr!(op, attr_name, arr_attr)
+    end
+    return nothing
+end
+
+function _set_func_arg_guaranteed_attrs!(
+    func_op::MLIR.IR.Operation, arg_idx::Integer, attr_pairs::Vector{Pair{String,Core.Bool}}
+)
+    ctx = MLIR.IR.current_context()
+    for (attr_name, state) in attr_pairs
+        g_attr = _guaranteed_attr(ctx, state)
+        MLIR.API.mlirFuncSetArgAttr(func_op, arg_idx, attr_name, g_attr)
+    end
+    return nothing
+end
+
+function _lookup_and_clone_symbol_in_module(mod::MLIR.IR.Module, callee_name::String)
+    mod_op = MLIR.IR.Operation(mod)
+    tab = MLIR.API.mlirSymbolTableCreate(mod_op)
+    try
+        raw_callee = MLIR.API.mlirSymbolTableLookup(tab, callee_name)
+        MLIR.IR.mlirIsNull(raw_callee) && return nothing, ""
+        callee_op = MLIR.IR.Operation(raw_callee)
+        base_name = callee_name * "_assume"
+        new_name = base_name
+        for i in 0:10000
+            candidate = i == 0 ? base_name : string(base_name, "_", i)
+            if MLIR.IR.mlirIsNull(MLIR.API.mlirSymbolTableLookup(tab, candidate))
+                new_name = candidate
+                break
+            end
+        end
+        cloned_op = Base.copy(callee_op)
+        MLIR.IR.setattr!(
+            cloned_op, "sym_name", MLIR.IR.Attribute(new_name; context=MLIR.IR.context(mod))
+        )
+        Base.push!(MLIR.IR.body(mod), cloned_op)
+        return cloned_op, new_name
+    finally
+        MLIR.API.mlirSymbolTableDestroy(tab)
+    end
+end
+
+function _clone_and_annotate_batch_callee!(
+    batch_op::MLIR.IR.Operation,
+    res_idx::Integer,
+    attr_pairs::Vector{Pair{String,Core.Bool}},
+)
+    fn_attr = MLIR.IR.getattr(batch_op, "fn")
+    (fn_attr === nothing || !MLIR.IR.isflatsymbolref(fn_attr)) && return nothing
+    callee_name = MLIR.IR.flatsymbol(fn_attr)
+    mod = MLIR.IR.current_module()
+    cloned_callee, new_name = _lookup_and_clone_symbol_in_module(mod, callee_name)
+    cloned_callee === nothing && return nothing
+
+    ctx = MLIR.IR.current_context()
+    MLIR.IR.setattr!(batch_op, "fn", MLIR.IR.FlatSymbolRefAttribute(new_name; context=ctx))
+
+    MLIR.IR.nregions(cloned_callee) >= 1 || return nothing
+    reg = MLIR.IR.region(cloned_callee, 1)
+    entry_blk = MLIR.IR.first_block(reg)
+    entry_blk === nothing && return nothing
+    term_op = MLIR.IR.terminator(entry_blk)
+    term_op === nothing && return nothing
+    (res_idx + 1 <= MLIR.IR.noperands(term_op)) || return nothing
+
+    ret_val = MLIR.IR.operand(term_op, res_idx + 1)
+    if MLIR.IR.is_op_res(ret_val)
+        def_op = MLIR.IR.op_owner(ret_val)
+        def_res_idx = MLIR.IR.op_res_num(ret_val)
+        _set_op_guaranteed_attrs!(def_op, def_res_idx, attr_pairs)
+        if MLIR.IR.name(def_op) == "enzyme.batch"
+            _clone_and_annotate_batch_callee!(def_op, def_res_idx, attr_pairs)
+        end
+    elseif MLIR.IR.is_block_arg(ret_val)
+        arg_blk = MLIR.IR.block_owner(ret_val)
+        if arg_blk == entry_blk
+            _set_func_arg_guaranteed_attrs!(
+                cloned_callee, MLIR.IR.block_arg_num(ret_val), attr_pairs
+            )
+        end
+    end
+    return nothing
+end
+
+function _validate_and_collect_assume_attrs(
+    nd::Int,
+    sz::Tuple,
+    no_nan::Union{Core.Bool,Nothing},
+    finite::Union{Core.Bool,Nothing},
+    non_negative::Union{Core.Bool,Nothing},
+    symmetric::Union{Core.Bool,Nothing},
+    purely_real::Union{Core.Bool,Nothing},
+    purely_imaginary::Union{Core.Bool,Nothing},
+)
+    if finite === true && no_nan === false
+        throw(ArgumentError("cannot assume both `finite=true` and `no_nan=false`"))
+    end
+    if symmetric === true && (nd != 2 || sz[1] != sz[2])
+        throw(
+            ArgumentError("`symmetric=true` requires a square 2D matrix, got shape $(sz)")
+        )
+    end
+    eff_no_nan = (finite === true && no_nan === nothing) ? true : no_nan
+    pairs = Pair{String,Core.Bool}[]
+    eff_no_nan !== nothing && Base.push!(pairs, "enzymexla.no_nan" => eff_no_nan)
+    finite !== nothing && Base.push!(pairs, "enzymexla.finite" => finite)
+    non_negative !== nothing && Base.push!(pairs, "enzymexla.non_negative" => non_negative)
+    if symmetric !== nothing && nd == 2 && sz[1] == sz[2]
+        Base.push!(pairs, "enzymexla.symmetric_matrix" => symmetric)
+    end
+    if purely_real !== nothing
+        Base.push!(pairs, "enzymexla.complex_is_purely_real" => purely_real)
+    end
+    if purely_imaginary !== nothing
+        Base.push!(pairs, "enzymexla.complex_is_purely_imaginary" => purely_imaginary)
+    end
+    return pairs
+end
+
+"""
+    assume(
+        input::Union{TracedRArray,TracedRNumber};
+        no_nan::Union{Bool,Nothing}=nothing,
+        finite::Union{Bool,Nothing}=nothing,
+        non_negative::Union{Bool,Nothing}=nothing,
+        symmetric::Union{Bool,Nothing}=nothing,
+        purely_real::Union{Bool,Nothing}=nothing,
+        purely_imaginary::Union{Bool,Nothing}=nothing,
+    )
+
+Attaches EnzymeXLA guaranteed-analysis attributes (`enzymexla.no_nan`, `enzymexla.finite`,
+`enzymexla.non_negative`, `enzymexla.symmetric_matrix`,
+`enzymexla.complex_is_purely_real`, `enzymexla.complex_is_purely_imaginary`) to `input`
+and returns a traced value carrying those assumptions.
+"""
+@noinline function assume(
+    input::Union{TracedRArray,TracedRNumber};
+    no_nan::Union{Core.Bool,Nothing}=nothing,
+    finite::Union{Core.Bool,Nothing}=nothing,
+    non_negative::Union{Core.Bool,Nothing}=nothing,
+    symmetric::Union{Core.Bool,Nothing}=nothing,
+    purely_real::Union{Core.Bool,Nothing}=nothing,
+    purely_imaginary::Union{Core.Bool,Nothing}=nothing,
+)
+    attr_pairs = _validate_and_collect_assume_attrs(
+        ndims(input),
+        size(input),
+        no_nan,
+        finite,
+        non_negative,
+        symmetric,
+        purely_real,
+        purely_imaginary,
+    )
+    isempty(attr_pairs) && return input
+
+    val = input.mlir_data
+    cur_blk = MLIR.IR.current_block()
+
+    if MLIR.IR.is_block_arg(val)
+        blk = MLIR.IR.block_owner(val)
+        if blk == cur_blk && _value_has_no_uses(val)
+            pop = MLIR.IR.parent_op(blk)
+            if !MLIR.IR.mlirIsNull(pop.ref) && MLIR.IR.name(pop) == "func.func"
+                _set_func_arg_guaranteed_attrs!(pop, MLIR.IR.block_arg_num(val), attr_pairs)
+            end
+        end
+        return input
+    elseif MLIR.IR.is_op_res(val)
+        op = MLIR.IR.op_owner(val)
+        res_idx = MLIR.IR.op_res_num(val)
+        op_blk = MLIR.IR.block(op)
+        if op_blk == cur_blk && _value_has_no_uses(val)
+            _set_op_guaranteed_attrs!(op, res_idx, attr_pairs)
+            op_name = MLIR.IR.name(op)
+            if op_name == "enzyme.batch"
+                _clone_and_annotate_batch_callee!(op, res_idx, attr_pairs)
+            elseif op_name == "stablehlo.transpose" && MLIR.IR.noperands(op) == 1
+                opnd = MLIR.IR.operand(op, 1)
+                if MLIR.IR.is_block_arg(opnd) &&
+                    MLIR.IR.block_owner(opnd) == cur_blk &&
+                    _value_only_used_by_op(opnd, op)
+                    pop = MLIR.IR.parent_op(cur_blk)
+                    if !MLIR.IR.mlirIsNull(pop.ref) && MLIR.IR.name(pop) == "func.func"
+                        _set_func_arg_guaranteed_attrs!(
+                            pop, MLIR.IR.block_arg_num(opnd), attr_pairs
+                        )
+                    end
+                end
+            end
+            return input
+        elseif op_blk == cur_blk &&
+            MLIR.IR.nregions(op) == 0 &&
+            MLIR.IR.name(op) != "stablehlo.transpose"
+            op_clone = Base.copy(op)
+            Base.push!(cur_blk, op_clone)
+            _set_op_guaranteed_attrs!(op_clone, res_idx, attr_pairs)
+            if MLIR.IR.name(op_clone) == "enzyme.batch"
+                _clone_and_annotate_batch_callee!(op_clone, res_idx, attr_pairs)
+            end
+            new_val = MLIR.IR.result(op_clone, res_idx + 1)
+            if input isa TracedRNumber
+                return TracedRNumber{unwrapped_eltype(input)}((), new_val)
+            else
+                return TracedRArray{unwrapped_eltype(input),ndims(input)}(
+                    (), new_val, size(input)
+                )
+            end
+        end
+    end
+    return input
+end
+
 function _construct_reduce_function(f::F, Ts::Type...) where {F}
     inputs_1 = [Reactant.promote_to(TracedRNumber{T}, 0) for T in Ts]
     inputs_2 = [Reactant.promote_to(TracedRNumber{T}, 0) for T in Ts]
