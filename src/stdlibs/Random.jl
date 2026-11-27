@@ -54,6 +54,14 @@ end
     return Random.seed!(rng, seed[1:length(rng.seed)])
 end
 
+@noinline function Random.seed!(rng::ReactantRNG)
+    if Reactant.within_compile()
+        return Random.seed!(rng, Reactant.promote_to(TracedRArray, make_seed()))
+    else
+        return Random.seed!(rng, Reactant.to_rarray(make_seed()))
+    end
+end
+
 @noinline function Random.seed!(rng::ReactantRNG, seed::AbstractVector)
     rng.seed .= seed
     return rng
