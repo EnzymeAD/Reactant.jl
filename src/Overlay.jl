@@ -452,3 +452,46 @@ end
         return call_with_native(*, a, b, c, d)
     end
 end
+
+@reactant_overlay function Base.getindex(a::AbstractConcreteArray, args...)
+    return throw_untraced_concrete_error(Base.getindex, typeof(a))
+end
+
+@reactant_overlay function Base.setindex!(a::AbstractConcreteArray, v, args...)
+    return throw_untraced_concrete_error(Base.setindex!, typeof(a))
+end
+
+@reactant_overlay function Base.fill!(a::AbstractConcreteArray, val)
+    return throw_untraced_concrete_error(Base.fill!, typeof(a))
+end
+
+@reactant_overlay function Base.copyto!(dst::AbstractConcreteArray, src::AbstractArray)
+    return throw_untraced_concrete_error(Base.copyto!, typeof(dst))
+end
+
+@reactant_overlay function Base.copyto!(
+    dst::AbstractConcreteArray, bc::Base.Broadcast.Broadcasted
+)
+    return throw_untraced_concrete_error(Base.copyto!, typeof(dst))
+end
+
+for jlop in (
+        :(Base.isless),
+        :(Base.:+),
+        :(Base.:-),
+        :(Base.:*),
+        :(Base.:/),
+        :(Base.:^),
+        :(Base.:(==)),
+    ),
+    T in (AbstractConcreteNumber, AbstractConcreteArray{<:Number,0})
+
+    @eval begin
+        @reactant_overlay function $(jlop)(x::$(T), ::TracedRNumber)
+            return throw_untraced_concrete_error($(jlop), typeof(x))
+        end
+        @reactant_overlay function $(jlop)(::TracedRNumber, y::$(T))
+            return throw_untraced_concrete_error($(jlop), typeof(y))
+        end
+    end
+end
