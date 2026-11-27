@@ -205,6 +205,21 @@ function deactivate_constant_context!(blk::MLIR.IR.Block)
     return Base.pop!(task_local_storage(:entry_block)::Vector{__TLSEntryBlockType})
 end
 
+function _active_constant_dict()
+    stack = get(task_local_storage(), :entry_block, nothing)
+    if stack isa Vector{__TLSEntryBlockType} && !isempty(stack)
+        constant_blk, constants = last(stack)
+        if constant_blk == MLIR.IR.current_block()
+            raw_parent = MLIR.API.mlirBlockGetParentOperation(constant_blk)
+            if !MLIR.IR.mlirIsNull(raw_parent) &&
+                MLIR.IR.name(MLIR.IR.Operation(raw_parent)) != "builtin.module"
+                return constants
+            end
+        end
+    end
+    return nothing
+end
+
 # constant ops
 @noinline function constant(
     x::DenseArray{T,N}; location=mlir_stacktrace("constant", @__FILE__, @__LINE__)
@@ -232,7 +247,7 @@ end
     parent = MLIR.IR.parent_op(constant_blk)
     @assert MLIR.IR.name(parent) != "builtin.module"
     if haskey(constants, value)
-        return constants[value]
+        return copy(constants[value])
     else
         output = mlir_type(TracedRArray{T,N}, size(x))
 
@@ -255,7 +270,7 @@ end
 
         res = MLIR.IR.result(cstop)
         tres = TracedRArray{T,N}((), res, size(x))
-        constants[value] = tres
+        constants[value] = copy(tres)
         return tres
     end
 end
@@ -365,10 +380,17 @@ for (T, mlir_func) in (
         )
             tt = MLIR.IR.TensorType(shape, MLIR.IR.Type($T); location=location)
 
-            splatattr = MLIR.API.$mlir_func(tt, number)
+            splatattr = MLIR.IR.Attribute(MLIR.API.$mlir_func(tt, number))
+            constants = _active_constant_dict()
+            if constants !== nothing && haskey(constants, splatattr)
+                return copy(constants[splatattr])::TracedRArray{$T,length(shape)}
+            end
             cst_op = stablehlo.constant(; output=tt, value=splatattr, location=location)
             cst = MLIR.IR.result(cst_op)
             ta = TracedRArray{$T,length(shape)}((), cst, shape)
+            if constants !== nothing
+                constants[splatattr] = copy(ta)
+            end
             return ta
         end
     end
@@ -408,16 +430,25 @@ end
 @noinline function fill(
     element::T, shape::Vector{Int}; location=mlir_stacktrace("fill", @__FILE__, @__LINE__)
 ) where {T<:Number}
-    tt = MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
-    splatattr = MLIR.API.mlirDenseElementsAttrSplatGet(tt, _fill_element_attr(element))
     if T <: Complex{<:Integer}
         error(
             "Generating a constant of type $T is not supported, eltype of complex must be Float32 or Float64",
         )
     end
+    tt = MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
+    splatattr = MLIR.IR.Attribute(
+        MLIR.API.mlirDenseElementsAttrSplatGet(tt, _fill_element_attr(element))
+    )
+    constants = _active_constant_dict()
+    if constants !== nothing && haskey(constants, splatattr)
+        return copy(constants[splatattr])::TracedRArray{T,length(shape)}
+    end
     cst_op = stablehlo.constant(; output=tt, value=splatattr, location=location)
     cst = MLIR.IR.result(cst_op)
     ta = TracedRArray{T,length(shape)}((), cst, shape)
+    if constants !== nothing
+        constants[splatattr] = copy(ta)
+    end
     return ta
 end
 

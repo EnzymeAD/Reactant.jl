@@ -1534,3 +1534,27 @@ end
         end
     end
 end
+
+function _repeated_scalar_add_3215(x)
+    acc = x
+    acc = acc .+ 3.5
+    acc = acc .+ 3.5
+    acc = acc .+ 3.5
+    acc = acc .+ 3.5
+    acc = acc .+ Float16(2.0)
+    acc = acc .+ Float16(2.0)
+    acc = acc .+ Float16(2.0)
+    return acc
+end
+
+@testset "fill and scalar constant memoization (#3215)" begin
+    x = Reactant.to_rarray([1.0, 2.0, 3.0, 4.0])
+    ir = sprint(
+        show, (@code_hlo optimize = false raise = false _repeated_scalar_add_3215(x))
+    )
+    n_f64 = length(collect(eachmatch(r"stablehlo\.constant dense<3\.5", ir)))
+    n_f16 = length(collect(eachmatch(r"stablehlo\.constant dense<2\.0", ir)))
+    @test n_f64 == 1
+    @test n_f16 == 1
+    @test Array(@jit(_repeated_scalar_add_3215(x))) ≈ Array(x) .+ 20.0
+end
