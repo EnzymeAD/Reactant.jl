@@ -310,3 +310,19 @@ end
 
     @test Array(@jit(permutedims!_reshaped(A_ra, B_ra))) ≈ permutedims!_reshaped(A, B)
 end
+
+@testset "eager broadcasting on wrapped concrete arrays (#3583)" begin
+    @test Broadcast.BroadcastStyle(Adjoint{Float32,ConcretePJRTArray{Float32,2,1}}) ==
+        Broadcast.ArrayStyle{ConcretePJRTArray}()
+    @test Broadcast.BroadcastStyle(Adjoint{Float32,ConcreteIFRTArray{Float32,2,Nothing}}) ==
+        Broadcast.ArrayStyle{ConcreteIFRTArray}()
+
+    x_host = reshape(Float32.(1:6), 2, 3)
+    x = Reactant.to_rarray(x_host)
+    @test Array(x' .+ 1.0f0) ≈ x_host' .+ 1.0f0
+    @test Array(transpose(x) .* 2.0f0) ≈ transpose(x_host) .* 2.0f0
+    @test Array(view(x, 1:2, 2:3) .- 3.0f0) ≈ view(x_host, 1:2, 2:3) .- 3.0f0
+    dst = Reactant.to_rarray(zeros(Float32, 2, 3))
+    dst' .= x' .+ 5.0f0
+    @test Array(dst) ≈ x_host .+ 5.0f0
+end

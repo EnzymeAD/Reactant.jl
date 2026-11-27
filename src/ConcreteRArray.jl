@@ -608,10 +608,10 @@ function Base.similar(::Type{ConcreteIFRTArray{T}}, dims::Dims) where {T}
 end
 
 # Broadcasting interface
-function Broadcast.BroadcastStyle(::Type{<:ConcretePJRTArray})
+function Broadcast.BroadcastStyle(::Type{<:AnyConcretePJRTArray})
     return Broadcast.ArrayStyle{ConcretePJRTArray}()
 end
-function Broadcast.BroadcastStyle(::Type{<:ConcreteIFRTArray})
+function Broadcast.BroadcastStyle(::Type{<:AnyConcreteIFRTArray})
     return Broadcast.ArrayStyle{ConcreteIFRTArray}()
 end
 
@@ -627,19 +627,18 @@ function Base.similar(
     return similar(ConcreteIFRTArray, T, axes(bc))
 end
 
+function _is_unsharded_concrete(x)
+    return !(x isa UnionAnyConcreteRArray) || !Sharding.is_sharded(ancestor(x))
+end
+
 # TODO(#2255) replace this copy for `setindex!` maybe? how to copy data to already existing buffer? (i.e. `copyto!`)
 function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcretePJRTArray}})
     bc = Broadcast.flatten(bc)
     for x in bc.args
-        x isa ConcretePJRTArray && wait(x)
+        x isa AnyConcretePJRTArray && wait(ancestor(x))
     end
 
-    if all(buffer_on_cpu, bc.args) && all(
-        x ->
-            !(x isa ConcretePJRTArray) ||
-                (x isa ConcretePJRTArray && !Sharding.is_sharded(x)),
-        bc.args,
-    )
+    if all(buffer_on_cpu, bc.args) && all(_is_unsharded_concrete, bc.args)
         ElType = Base.Broadcast.combine_eltypes(bc.f, bc.args)
         if !Base.isconcretetype(ElType)
             throw(
@@ -823,6 +822,14 @@ for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
         end
 
         function Base.copyto!(
+            dest::Union{WrappedConcretePJRTArray,WrappedConcreteIFRTArray},
+            src::Broadcast.Broadcasted{Broadcast.ArrayStyle{$(aType)}},
+        )
+            copyto!(dest, copy(src))
+            return dest
+        end
+
+        function Base.copyto!(
             dest::Array, src::Broadcast.Broadcasted{Broadcast.ArrayStyle{$(aType)}}
         )
             write_to_host_buffer!(dest, copy(src))
@@ -876,6 +883,9 @@ end
 buffer_on_cpu(::Any) = true
 buffer_on_cpu(x::ConcretePJRTArray) = all(XLA.buffer_on_cpu, x.data)
 buffer_on_cpu(x::ConcreteIFRTArray) = XLA.buffer_on_cpu(x.data)
+function buffer_on_cpu(x::Union{WrappedConcretePJRTArray,WrappedConcreteIFRTArray})
+    return buffer_on_cpu(ancestor(x))
+end
 
 function Base.zero(x::ConcretePJRTArray{T,N}) where {T,N}
     return ConcretePJRTArray(
