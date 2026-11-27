@@ -129,8 +129,18 @@ end
 function get_ancestor_and_indices(
     x::Base.ReshapedArray{<:TracedRNumber,N}, indices...
 ) where {N}
-    @assert length(indices) == N "Expected $N indices, got $(length(indices))"
     indices = Base.to_indices(x, indices)
+    if length(indices) == 1 && N != 1
+        idx1 = only(indices)
+        parent_linear = vec(LinearIndices(size(parent(x))))
+        if is_traced(idx1)
+            traced_lin = promote_to(TracedRArray{Int64,1}, collect(parent_linear))
+            return (parent(x), (traced_lin[idx1],))
+        else
+            return (parent(x), (parent_linear[idx1],))
+        end
+    end
+    @assert length(indices) == N "Expected $N indices, got $(length(indices))"
     if any(is_traced, indices)
         indices, integer_indices, result_size, _, flattened_size = traced_indices(
             indices...
