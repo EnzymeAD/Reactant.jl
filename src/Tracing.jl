@@ -2097,31 +2097,31 @@ Base.@nospecializeinfer function make_tracer(
 )
     NT = Core.Typeof(prev)
     A = NT.parameters[1]
-    RT = NT.parameters[2]
+    n = length(A)
 
     if mode == TracedToTypes
         push!(path, NT)
-        for i in 1:length(A)
+        for i in 1:n
             make_tracer(
                 seen, Base.getfield(prev, i), path, mode; track_numbers, sharding, kwargs...
             )
         end
         return nothing
     end
-    return NamedTuple{A,traced_type(RT, Val(mode), track_numbers, sharding, runtime)}((
-        (
-            make_tracer(
-                seen,
-                Base.getfield(prev, i),
-                append_path(path, i),
-                mode;
-                sharding=Base.getproperty(sharding, i),
-                track_numbers,
-                runtime,
-                kwargs...,
-            ) for i in 1:length(A)
-        )...,
-    ))
+    flds = Vector{Any}(undef, n)
+    for i in 1:n
+        flds[i] = make_tracer(
+            seen,
+            Base.getfield(prev, i),
+            append_path(path, i),
+            mode;
+            sharding=Base.getproperty(sharding, i),
+            track_numbers,
+            runtime,
+            kwargs...,
+        )
+    end
+    return NamedTuple{A}(Tuple(flds))
 end
 
 struct UndefinedBox end

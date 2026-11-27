@@ -101,3 +101,52 @@ end
     @test out isa ConcreteRArray
     @test @jit(sum(sr)) ≈ sum(s)
 end
+
+struct Pulse2869{T}
+    α::T
+    β::T
+end
+
+@inline pulse_vis_2869(m::Pulse2869, p) = cos(m.α * p.U + m.β * p.V)
+@inline pulse_dot_2869(m::Pulse2869, p::Pulse2869) = sin(m.α * p.α + m.β * p.β)
+
+function kernel_2869!(pvis, dp, m)
+    pvis .*= pulse_vis_2869.(Ref(m), dp)
+    return pvis
+end
+
+function kernel_struct_2869!(pvis, dp, m)
+    pvis .*= pulse_dot_2869.(Ref(m), dp)
+    return pvis
+end
+
+@testset "StructArray with host or ConcreteRArray columns in broadcast (#2869)" begin
+    u = collect(range(-1.0, 1.0; length=16))
+    v = collect(range(0.5, 2.5; length=16))
+    m_cpu = Pulse2869(0.078, -0.042)
+    m_ra = Pulse2869(ConcreteRNumber(0.078), ConcreteRNumber(-0.042))
+    expected = ones(Float64, 16) .* pulse_vis_2869.(Ref(m_cpu), StructArray((U=u, V=v)))
+
+    # Untraced host StructArray broadcasted against traced Ref(m)
+    dp_host = StructArray((U=u, V=v))
+    pvis1 = Reactant.to_rarray(ones(Float64, 16))
+    @test Array(@jit kernel_2869!(pvis1, dp_host, m_ra)) ≈ expected
+
+    # StructArray constructed directly from ConcreteRArray columns (without outer to_rarray)
+    dp_rcols = StructArray((U=Reactant.to_rarray(u), V=Reactant.to_rarray(v)))
+    pvis2 = Reactant.to_rarray(ones(Float64, 16))
+    @test Array(@jit kernel_2869!(pvis2, dp_rcols, m_ra)) ≈ expected
+
+    # Custom struct eltype StructArray{Pulse2869{Float64}} in both forms
+    dp_pulse_host = StructArray{Pulse2869{Float64}}((u, v))
+    dp_pulse_rcols = StructArray{Pulse2869{Float64}}((
+        Reactant.to_rarray(u), Reactant.to_rarray(v)
+    ))
+    expected_pulse = ones(Float64, 16) .* pulse_dot_2869.(Ref(m_cpu), dp_pulse_host)
+
+    pvis3 = Reactant.to_rarray(ones(Float64, 16))
+    @test Array(@jit kernel_struct_2869!(pvis3, dp_pulse_host, m_ra)) ≈ expected_pulse
+
+    pvis4 = Reactant.to_rarray(ones(Float64, 16))
+    @test Array(@jit kernel_struct_2869!(pvis4, dp_pulse_rcols, m_ra)) ≈ expected_pulse
+end
