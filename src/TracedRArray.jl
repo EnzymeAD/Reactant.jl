@@ -1433,6 +1433,20 @@ function Base.append!(a::TracedRArray{T,1}, b::TracedRArray{T,1}) where {T}
     return a
 end
 
-Base.extrema(A::TracedRArray) = minimum(A), maximum(A)
+Base._extrema(A::AnyTracedRArray, ::Colon; kw...) = Base._extrema(identity, A, :; kw...)
+function Base._extrema(f, A::AnyTracedRArray, ::Colon; kw...)
+    return minimum(f, A; kw...), maximum(f, A; kw...)
+end
+Base._extrema(A::AnyTracedRArray, dims; kw...) = Base._extrema(identity, A, dims; kw...)
+function Base._extrema(f, A::AnyTracedRArray, dims; kw...)
+    mins = minimum(f, A; dims, kw...)
+    maxs = maximum(f, A; dims, kw...)
+    RT = Tuple{eltype(mins),eltype(maxs)}
+    out = Array{RT,ndims(mins)}(undef, size(mins))
+    for I in eachindex(mins, maxs)
+        out[I] = (@allowscalar(mins[I]), @allowscalar(maxs[I]))
+    end
+    return out
+end
 
 end
