@@ -288,6 +288,31 @@ end
     end
 end
 
+@reactant_overlay function Base.mapreduce(
+    f, op, A::AbstractArray, B::AbstractArray, Cs::AbstractArray...; kwargs...
+)
+    if (
+        use_overlayed_version(A) ||
+        use_overlayed_version(B) ||
+        use_overlayed_version(f) ||
+        looped_any(use_overlayed_version, Cs)
+    )
+        return call_with_native(
+            TracedRArrayOverrides.overloaded_mapreduce, f, op, A, B, Cs...; kwargs...
+        )
+    else
+        return call_with_native(
+            Base.mapreduce,
+            CallWithReactant(f),
+            CallWithReactant(op),
+            A,
+            B,
+            Cs...;
+            kwargs...,
+        )
+    end
+end
+
 @reactant_overlay function Base._all(f, x::AbstractArray, dims)
     if use_overlayed_version(x) || use_overlayed_version(f)
         return call_with_native(TracedRArrayOverrides.overloaded_mapreduce, f, &, x; dims)
