@@ -2450,67 +2450,87 @@ function make_tracer(
     end
 end
 
-function traced_type_inner(
-    @nospecialize(RT::Type{<:StepRangeLen}),
-    seen,
-    mode::TraceMode,
-    track_numbers::Type,
-    @nospecialize(ndevices),
-    runtime,
-)
-    T, R, S, L = RT.parameters
-    newT = traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime)
-    newR = traced_type_inner(R, seen, mode, track_numbers, ndevices, runtime)
-    newS = traced_type_inner(S, seen, mode, track_numbers, ndevices, runtime)
-    newL = traced_type_inner(L, seen, mode, Union{}, ndevices, runtime)
-    if T == newT && R == newR && S == newS && L == newL
-        return RT
-    else
-        return TracedStepRangeLen{newT,newR,newS,newL}
-    end
-end
-
-function make_tracer(
-    seen,
-    @nospecialize(prev::StepRangeLen),
-    @nospecialize(path),
-    mode;
-    @nospecialize(sharding = Sharding.NoSharding()),
-    kwargs...,
-)
-    Sharding.is_sharded(sharding) && error("Cannot specify sharding for StepRangeLen")
-    if mode == TracedToTypes
-        push!(path, Core.Typeof(prev))
-        make_tracer(seen, prev.ref, path, mode; sharding, kwargs...)
-        make_tracer(seen, prev.step, path, mode; sharding, kwargs...)
-        make_tracer(seen, prev.len, path, mode; sharding, kwargs..., track_numbers=Union{})
-        make_tracer(seen, prev.offset, path, mode; sharding, kwargs...)
-        return nothing
-    end
-    newref = make_tracer(seen, prev.ref, append_path(path, :ref), mode; sharding, kwargs...)
-    newstep = make_tracer(
-        seen, prev.step, append_path(path, :step), mode; sharding, kwargs...
-    )
-    newlen = make_tracer(
+for _RangeTy in (StepRangeLen, TracedStepRangeLen)
+    @eval function traced_type_inner(
+        @nospecialize(RT::Type{<:$_RangeTy}),
         seen,
-        prev.len,
-        append_path(path, :len),
+        mode::TraceMode,
+        track_numbers::Type,
+        @nospecialize(ndevices),
+        runtime,
+    )
+        T, R, S, L = RT.parameters
+        newT = traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime)
+        newR = traced_type_inner(R, seen, mode, track_numbers, ndevices, runtime)
+        newS = traced_type_inner(S, seen, mode, track_numbers, ndevices, runtime)
+        newL = traced_type_inner(L, seen, mode, Union{}, ndevices, runtime)
+        if T == newT && R == newR && S == newS && L == newL
+            return RT
+        else
+            return TracedStepRangeLen{newT,newR,newS,newL}
+        end
+    end
+
+    @eval function make_tracer(
+        seen,
+        @nospecialize(prev::$_RangeTy),
+        @nospecialize(path),
         mode;
-        sharding,
+        @nospecialize(sharding = Sharding.NoSharding()),
         kwargs...,
-        track_numbers=Union{},
     )
-    newoffset = make_tracer(
-        seen, prev.offset, append_path(path, :offset), mode; sharding, kwargs...
-    )
-    if (
-        typeof(newref) == typeof(prev.ref) &&
-        typeof(newstep) == typeof(prev.step) &&
-        typeof(newlen) == typeof(prev.len) &&
-        typeof(newoffset) == typeof(prev.offset)
-    )
-        return prev
-    else
+        Sharding.is_sharded(sharding) && error("Cannot specify sharding for StepRangeLen")
+        if mode == TracedToTypes
+            push!(path, Core.Typeof(prev))
+            make_tracer(seen, prev.ref, path, mode; sharding, kwargs...)
+            make_tracer(seen, prev.step, path, mode; sharding, kwargs...)
+            make_tracer(
+                seen, prev.len, path, mode; sharding, kwargs..., track_numbers=Union{}
+            )
+            make_tracer(
+                seen, prev.offset, path, mode; sharding, kwargs..., track_numbers=Union{}
+            )
+            return nothing
+        end
+        newref = make_tracer(
+            seen, prev.ref, append_path(path, :ref), mode; sharding, kwargs...
+        )
+        newstep = make_tracer(
+            seen, prev.step, append_path(path, :step), mode; sharding, kwargs...
+        )
+        newlen = make_tracer(
+            seen,
+            prev.len,
+            append_path(path, :len),
+            mode;
+            sharding,
+            kwargs...,
+            track_numbers=Union{},
+        )
+        newoffset = make_tracer(
+            seen,
+            prev.offset,
+            append_path(path, :offset),
+            mode;
+            sharding,
+            kwargs...,
+            track_numbers=Union{},
+        )
+        if $(_RangeTy === TracedStepRangeLen)
+            if newref === prev.ref &&
+                newstep === prev.step &&
+                newlen === prev.len &&
+                newoffset === prev.offset
+                return prev
+            end
+        elseif (
+            typeof(newref) == typeof(prev.ref) &&
+            typeof(newstep) == typeof(prev.step) &&
+            typeof(newlen) == typeof(prev.len) &&
+            typeof(newoffset) == typeof(prev.offset)
+        )
+            return prev
+        end
         return TracedStepRangeLen(newref, newstep, newlen, newoffset)
     end
 end
