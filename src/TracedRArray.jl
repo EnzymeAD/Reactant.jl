@@ -192,6 +192,15 @@ function overloaded_mapreduce(
     dims=:,
     init=Base._InitialValue(),
 ) where {T,N}
+    mapped = TracedUtils.elem_apply(f, A)
+    # `f` returned a plain value, the same for every element, so the result is known at
+    # trace time: compute it as Base does. Inference resolves the `isbitstype` check, which
+    # keeps this function's return type inferable when `f` returns traced values.
+    if isbitstype(Core.Compiler.return_type(f, Tuple{TracedRNumber{T}})) &&
+        !Reactant.use_overlayed_version(mapped)
+        return mapreduce(Returns(mapped), op, LinearIndices(A); dims, init)
+    end
+
     # don't reassign dims to avoid the "captured variable in closure" type instability
     normalized_dims = sort(
         if dims isa Int
@@ -218,7 +227,7 @@ function overloaded_mapreduce(
     # predicate in `sum(x -> x == 1, a)` returns `Bool` whatever `A` was converted to.
     # Reducing in the narrow type is silently wrong: `stablehlo.add` over `i1` is a logical
     # `or`, and small integers wrap.
-    reduce_input = materialize_traced_array(TracedUtils.elem_apply(f, A))
+    reduce_input = materialize_traced_array(mapped)
     if unwrapped_eltype(reduce_input) != op_in_T
         reduce_input = op_in_T.(reduce_input)
     end
