@@ -70,9 +70,21 @@ end
     return Base.getproperty(obj, field)
 end
 
+@inline function _tracks_array_elements(@nospecialize(obj::AbstractArray))
+    @static if isdefined(Core, :GenericMemory)
+        return obj isa Array || obj isa Core.GenericMemory
+    else
+        return obj isa Array
+    end
+end
+
 @inline function traced_getfield(@nospecialize(obj::AbstractArray{T}), field) where {T}
-    (isbitstype(T) || ancestor(obj) isa RArray || obj isa AbstractRange) &&
-        return Base.getfield(obj, field)
+    (
+        !_tracks_array_elements(obj) ||
+        isbitstype(T) ||
+        ancestor(obj) isa RArray ||
+        obj isa AbstractRange
+    ) && return Base.getfield(obj, field)
     return Base.getindex(obj, field)
 end
 
@@ -90,8 +102,14 @@ end
     @nospecialize(obj::AbstractArray{T}), field, val, path
 ) where {T}
     ancestor_obj = ancestor(obj)
-    (isbitstype(T) || ancestor_obj isa RArray) &&
-        return setfield_carray!(obj, field, val, path)
+    ancestor_obj isa RArray && return setfield_carray!(obj, field, val, path)
+    if !_tracks_array_elements(obj) || isbitstype(T) || obj isa AbstractRange
+        return if field isa Symbol
+            setfield_carray!(obj, field, val, path)
+        else
+            Base.setfield!(obj, field, val)
+        end
+    end
     return Base.setindex!(obj, val, field)
 end
 
@@ -101,7 +119,20 @@ end
     val,
     path,
 )
-    return setfield_carray!(obj, field, val, path)
+    return if field isa Symbol
+        setfield_carray!(obj, field, val, path)
+    else
+        Base.setfield!(obj, field, val)
+    end
+end
+
+@inline function traced_setfield!(
+    @nospecialize(obj::Array{<:Union{ConcretePJRTNumber,ConcreteIFRTNumber}}),
+    field,
+    val,
+    _path,
+)
+    return Base.setindex!(obj, val, field)
 end
 
 @inline function traced_setfield!(@nospecialize(obj::Dict), field, val, _path)
