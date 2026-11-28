@@ -8493,6 +8493,7 @@ end
     MlirLLVMCConvTail = 0x0000000000000012
     MlirLLVMCConvCFGuard_Check = 0x0000000000000013
     MlirLLVMCConvSwiftTail = 0x0000000000000014
+    MlirLLVMCConvPreserveNone = 0x0000000000000015
     MlirLLVMCConvX86_StdCall = 0x0000000000000040
     MlirLLVMCConvX86_FastCall = 0x0000000000000041
     MlirLLVMCConvARM_APCS = 0x0000000000000042
@@ -16354,8 +16355,8 @@ end
 @cenum EnzymeXlaCommNcclRedOp::UInt32 begin
     ENZYMEXLA_COMM_NCCL_RED_OP_SUM = 0x0000000000000000
     ENZYMEXLA_COMM_NCCL_RED_OP_PROD = 0x0000000000000001
-    ENZYMEXLA_COMM_NCCL_RED_OP_MIN = 0x0000000000000002
-    ENZYMEXLA_COMM_NCCL_RED_OP_MAX = 0x0000000000000003
+    ENZYMEXLA_COMM_NCCL_RED_OP_MAX = 0x0000000000000002
+    ENZYMEXLA_COMM_NCCL_RED_OP_MIN = 0x0000000000000003
     ENZYMEXLA_COMM_NCCL_RED_OP_AVG = 0x0000000000000004
 end
 
@@ -16490,6 +16491,36 @@ function mlirTritonInferReduceOpEncoding(operandEncoding, axis)
     @ccall Reactant_jll.libReactantExtra.mlirTritonInferReduceOpEncoding(
         operandEncoding::MlirAttribute, axis::Cint
     )::MlirAttribute
+end
+
+function mlirGetDialectHandle__tpu__()
+    @ccall Reactant_jll.libReactantExtra.mlirGetDialectHandle__tpu__()::MlirDialectHandle
+end
+
+function mlirTPUAnalyzePotentialCommunication(op, has_communication, has_custom_barrier)
+    @ccall Reactant_jll.libReactantExtra.mlirTPUAnalyzePotentialCommunication(
+        op::MlirOperation, has_communication::Ptr{Bool}, has_custom_barrier::Ptr{Bool}
+    )::Cvoid
+end
+
+function mlirTpuRegisterMosaicSerdePass()
+    @ccall Reactant_jll.libReactantExtra.mlirTpuRegisterMosaicSerdePass()::Cvoid
+end
+
+function mlirTpuFloat8EXMYTypeGetUnderlyingType(exmy_type)
+    @ccall Reactant_jll.libReactantExtra.mlirTpuFloat8EXMYTypeGetUnderlyingType(
+        exmy_type::MlirType
+    )::MlirType
+end
+
+function mlirTpuIsAFloat8EXMYType(type)
+    @ccall Reactant_jll.libReactantExtra.mlirTpuIsAFloat8EXMYType(type::MlirType)::Bool
+end
+
+function mlirTpuFloat8EXMYTypeGet(ctx, exmy_type)
+    @ccall Reactant_jll.libReactantExtra.mlirTpuFloat8EXMYTypeGet(
+        ctx::MlirContext, exmy_type::MlirType
+    )::MlirType
 end
 
 function mlirMosaicGpuIsATileTransformAttr(attr)
@@ -16788,6 +16819,229 @@ function mlirMosaicGpuP2B6TypeGetTypeID()
     @ccall Reactant_jll.libReactantExtra.mlirMosaicGpuP2B6TypeGetTypeID()::MlirTypeID
 end
 
+function mlirGetDialectHandle__enzyme__()
+    @ccall Reactant_jll.libReactantExtra.mlirGetDialectHandle__enzyme__()::MlirDialectHandle
+end
+
+"""
+    enzymeActivityAttrGet(ctx, activity)
+
+Construct an `enzyme.activity` attribute from an activity code matching the `Activity` enum ordinals (0=active, 1=dup, 2=const, 3=dupnoneed, ...).
+"""
+function enzymeActivityAttrGet(ctx, activity)
+    @ccall Reactant_jll.libReactantExtra.enzymeActivityAttrGet(
+        ctx::MlirContext, activity::UInt32
+    )::MlirAttribute
+end
+
+"""
+    enzymeRegisterPasses()
+
+Register all Enzyme MLIR passes with the global registry.
+"""
+function enzymeRegisterPasses()
+    @ccall Reactant_jll.libReactantExtra.enzymeRegisterPasses()::Cvoid
+end
+
+"""
+    enzymeRegisterDialectExtensions(registry)
+
+Register Enzyme's external model AD implementations for the core MLIR dialects (arith, func, scf, ...) into the given DialectRegistry. Must be called before appending the registry to an MLIRContext so that the Differentiate pass knows how to lower ops in those dialects.
+"""
+function enzymeRegisterDialectExtensions(registry)
+    @ccall Reactant_jll.libReactantExtra.enzymeRegisterDialectExtensions(
+        registry::MlirDialectRegistry
+    )::Cvoid
+end
+
+"""
+    enzymeCreateDifferentiatePass()
+
+Create the core differentiation pass (`--enzyme`).
+"""
+function enzymeCreateDifferentiatePass()
+    @ccall Reactant_jll.libReactantExtra.enzymeCreateDifferentiatePass()::MlirPass
+end
+
+"""
+    enzymeCreateDifferentiatePassWithOptions(postpasses, verifyPostPasses)
+
+Create the core differentiation pass with options. postpasses: semicolon-separated list of passes to run after differentiation (may be NULL or empty). verifyPostPasses: run the verifier after each post-pass.
+"""
+function enzymeCreateDifferentiatePassWithOptions(postpasses, verifyPostPasses)
+    @ccall Reactant_jll.libReactantExtra.enzymeCreateDifferentiatePassWithOptions(
+        postpasses::MlirStringRef, verifyPostPasses::Bool
+    )::MlirPass
+end
+
+"""
+    enzymeCreateConvertEnzymeToMemRefPass()
+
+Create the `--enzyme-ops-to-memref` pass, which lowers `enzyme.init`, `enzyme.get`, and `enzyme.set` to `memref` + `scf.if`. Required before lowering to LLVM.
+"""
+function enzymeCreateConvertEnzymeToMemRefPass()
+    @ccall Reactant_jll.libReactantExtra.enzymeCreateConvertEnzymeToMemRefPass()::MlirPass
+end
+
+"""
+    enzymeCreateBatchPass()
+
+Create the `--enzyme-batch` pass, which lowers `enzyme.batch` ops to calls to generated `\\_*` functions.
+"""
+function enzymeCreateBatchPass()
+    @ccall Reactant_jll.libReactantExtra.enzymeCreateBatchPass()::MlirPass
+end
+
+"""
+    enzymeCreateBatchDiffPass()
+
+Create the `--enzyme-batch-diff` pass, which differentiates batched functions produced by `--enzyme-batch`.
+"""
+function enzymeCreateBatchDiffPass()
+    @ccall Reactant_jll.libReactantExtra.enzymeCreateBatchDiffPass()::MlirPass
+end
+
+"""
+    enzymeCreateRemoveUnusedEnzymeOpsPass()
+
+Create the `--remove-unnecessary-enzyme-ops` pass, which removes dead `enzyme.*` ops after differentiation.
+"""
+function enzymeCreateRemoveUnusedEnzymeOpsPass()
+    @ccall Reactant_jll.libReactantExtra.enzymeCreateRemoveUnusedEnzymeOpsPass()::MlirPass
+end
+
+"""
+    enzymeAutoDiffOpCreate(ctx, fn, resultTypes, nResults, inputs, nInputs, activity, nActivity, retActivity, nRetActivity, width, strongZero, loc)
+
+Construct an `enzyme.autodiff` (reverse-mode) op referencing the function named `fn`. `activity`/`retActivity` are arrays of `enzyme.activity` attributes of length `nActivity`/`nRetActivity`.
+"""
+function enzymeAutoDiffOpCreate(
+    ctx,
+    fn,
+    resultTypes,
+    nResults,
+    inputs,
+    nInputs,
+    activity,
+    nActivity,
+    retActivity,
+    nRetActivity,
+    width,
+    strongZero,
+    loc,
+)
+    @ccall Reactant_jll.libReactantExtra.enzymeAutoDiffOpCreate(
+        ctx::MlirContext,
+        fn::MlirStringRef,
+        resultTypes::Ptr{MlirType},
+        nResults::Cptrdiff_t,
+        inputs::Ptr{MlirValue},
+        nInputs::Cptrdiff_t,
+        activity::Ptr{MlirAttribute},
+        nActivity::Cptrdiff_t,
+        retActivity::Ptr{MlirAttribute},
+        nRetActivity::Cptrdiff_t,
+        width::Int64,
+        strongZero::Bool,
+        loc::MlirLocation,
+    )::MlirOperation
+end
+
+"""
+    enzymeForwardDiffOpCreate(ctx, fn, resultTypes, nResults, inputs, nInputs, activity, nActivity, retActivity, nRetActivity, width, strongZero, loc)
+
+Construct an `enzyme.fwddiff` (forward-mode) op referencing the function named `fn`. See [`enzymeAutoDiffOpCreate`](@ref) for parameter semantics.
+"""
+function enzymeForwardDiffOpCreate(
+    ctx,
+    fn,
+    resultTypes,
+    nResults,
+    inputs,
+    nInputs,
+    activity,
+    nActivity,
+    retActivity,
+    nRetActivity,
+    width,
+    strongZero,
+    loc,
+)
+    @ccall Reactant_jll.libReactantExtra.enzymeForwardDiffOpCreate(
+        ctx::MlirContext,
+        fn::MlirStringRef,
+        resultTypes::Ptr{MlirType},
+        nResults::Cptrdiff_t,
+        inputs::Ptr{MlirValue},
+        nInputs::Cptrdiff_t,
+        activity::Ptr{MlirAttribute},
+        nActivity::Cptrdiff_t,
+        retActivity::Ptr{MlirAttribute},
+        nRetActivity::Cptrdiff_t,
+        width::Int64,
+        strongZero::Bool,
+        loc::MlirLocation,
+    )::MlirOperation
+end
+
+"""
+    enzymeJacobianOpCreate(ctx, fn, resultTypes, nResults, inputs, nInputs, activity, nActivity, retActivity, nRetActivity, width, strongZero, loc)
+
+Construct an `enzyme.jacobian` op referencing the function named `fn`. See [`enzymeAutoDiffOpCreate`](@ref) for parameter semantics.
+"""
+function enzymeJacobianOpCreate(
+    ctx,
+    fn,
+    resultTypes,
+    nResults,
+    inputs,
+    nInputs,
+    activity,
+    nActivity,
+    retActivity,
+    nRetActivity,
+    width,
+    strongZero,
+    loc,
+)
+    @ccall Reactant_jll.libReactantExtra.enzymeJacobianOpCreate(
+        ctx::MlirContext,
+        fn::MlirStringRef,
+        resultTypes::Ptr{MlirType},
+        nResults::Cptrdiff_t,
+        inputs::Ptr{MlirValue},
+        nInputs::Cptrdiff_t,
+        activity::Ptr{MlirAttribute},
+        nActivity::Cptrdiff_t,
+        retActivity::Ptr{MlirAttribute},
+        nRetActivity::Cptrdiff_t,
+        width::Int64,
+        strongZero::Bool,
+        loc::MlirLocation,
+    )::MlirOperation
+end
+
+"""
+    enzymeBatchOpCreate(ctx, fn, resultTypes, nResults, inputs, nInputs, batchShape, nBatchShape, loc)
+
+Construct an `enzyme.batch` op that maps the function named `fn` over a batch of inputs. `batchShape` is an array of `nBatchShape` batch dimensions.
+"""
+function enzymeBatchOpCreate(
+    ctx, fn, resultTypes, nResults, inputs, nInputs, batchShape, nBatchShape, loc
+)
+    @ccall Reactant_jll.libReactantExtra.enzymeBatchOpCreate(
+        ctx::MlirContext,
+        fn::MlirStringRef,
+        resultTypes::Ptr{MlirType},
+        nResults::Cptrdiff_t,
+        inputs::Ptr{MlirValue},
+        nInputs::Cptrdiff_t,
+        batchShape::Ptr{Int64},
+        nBatchShape::Cptrdiff_t,
+        loc::MlirLocation,
+    )::MlirOperation
+end
+
 @cenum EnzymeRngDistribution::UInt32 begin
     EnzymeRngDistribution_Uniform = 0x0000000000000000
     EnzymeRngDistribution_Normal = 0x0000000000000001
@@ -17034,6 +17288,12 @@ function mlirPassManagerEnableXLATraceTiming(passManager)
     )::Cvoid
 end
 
+function mlirLlvmThreadPoolCreateWithMaxThreads(maxThreads)
+    @ccall Reactant_jll.libReactantExtra.mlirLlvmThreadPoolCreateWithMaxThreads(
+        maxThreads::Cuint
+    )::MlirLlvmThreadPool
+end
+
 function mlirOperationInject(ctx, block, code, location, verify_after_parse)
     @ccall Reactant_jll.libReactantExtra.mlirOperationInject(
         ctx::MlirContext,
@@ -17092,12 +17352,6 @@ end
 
 function GetDefaultTargetTriple()
     @ccall Reactant_jll.libReactantExtra.GetDefaultTargetTriple()::Cstring
-end
-
-function enzymeActivityAttrGet(ctx, val)
-    @ccall Reactant_jll.libReactantExtra.enzymeActivityAttrGet(
-        ctx::MlirContext, val::Int32
-    )::MlirAttribute
 end
 
 function CreateProfilerSession(
@@ -17395,6 +17649,18 @@ function CudaGetStreamExecutorDeviceDescription(device_id)
     )::Ptr{DeviceDescription}
 end
 
+function ReactantRocmDeviceGetProperties(jlprops, device_id)
+    @ccall Reactant_jll.libReactantExtra.ReactantRocmDeviceGetProperties(
+        jlprops::Ptr{DeviceProperties}, device_id::Int32
+    )::Cvoid
+end
+
+function ReactantRocmDeviceGetGcnArchName(buffer, size, device_id)
+    @ccall Reactant_jll.libReactantExtra.ReactantRocmDeviceGetGcnArchName(
+        buffer::Cstring, size::Int32, device_id::Int32
+    )::Cvoid
+end
+
 function deviceDescriptionToString(device)
     @ccall Reactant_jll.libReactantExtra.deviceDescriptionToString(
         device::Ptr{DeviceDescription}
@@ -17418,6 +17684,12 @@ function ArrayFromHostBuffer(client, data, ptype, dim, cshape, device)
     )::Ptr{PjRtBuffer}
 end
 
+function BufferToHost(buffer, data)
+    @ccall Reactant_jll.libReactantExtra.BufferToHost(
+        buffer::Ptr{PjRtBuffer}, data::Ptr{Cvoid}
+    )::Cvoid
+end
+
 function CopyToBuffer(client, buffer, data, offset, size, bufferP)
     @ccall Reactant_jll.libReactantExtra.CopyToBuffer(
         client::Ptr{PjRtClient},
@@ -17426,12 +17698,6 @@ function CopyToBuffer(client, buffer, data, offset, size, bufferP)
         offset::Csize_t,
         size::Csize_t,
         bufferP::Ptr{Ptr{PjRtBuffer}},
-    )::Cvoid
-end
-
-function BufferToHost(buffer, data)
-    @ccall Reactant_jll.libReactantExtra.BufferToHost(
-        buffer::Ptr{PjRtBuffer}, data::Ptr{Cvoid}
     )::Cvoid
 end
 
@@ -18141,6 +18407,12 @@ function ifrt_MemoryKindsAreEqual(a, b)
     @ccall Reactant_jll.libReactantExtra.ifrt_MemoryKindsAreEqual(
         a::Ptr{MemoryKind}, b::Ptr{MemoryKind}
     )::Bool
+end
+
+function free_ifrt_memory_kind(memory_kind)
+    @ccall Reactant_jll.libReactantExtra.free_ifrt_memory_kind(
+        memory_kind::Ptr{MemoryKind}
+    )::Cvoid
 end
 
 function free_op_sharding(op_sharding)

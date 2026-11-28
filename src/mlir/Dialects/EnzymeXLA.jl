@@ -72,6 +72,135 @@ function alternatives(; regions::Vector{Region}, location=Location())
     )
 end
 
+"""
+`ml_attention_grad`
+
+Computes gradients of scaled dot-product attention in BTNH layout given the
+forward inputs, forward output, log-sum-exp (lse), and output cotangent (d_output).
+"""
+function ml_attention_grad(
+    query::Value,
+    key::Value,
+    value::Value,
+    output::Value,
+    lse::Value,
+    d_output::Value,
+    bias=nothing::Union{Nothing,Value};
+    mask=nothing::Union{Nothing,Value},
+    q_lengths=nothing::Union{Nothing,Value},
+    kv_lengths=nothing::Union{Nothing,Value},
+    d_query::IR.Type,
+    d_key::IR.Type,
+    d_value::IR.Type,
+    d_bias=nothing::Union{Nothing,IR.Type},
+    scale,
+    is_causal=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[d_query, d_key, d_value]
+    operands = Value[query, key, value, output, lse, d_output]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("scale", scale),]
+    !isnothing(bias) && push!(operands, bias)
+    !isnothing(mask) && push!(operands, mask)
+    !isnothing(q_lengths) && push!(operands, q_lengths)
+    !isnothing(kv_lengths) && push!(operands, kv_lengths)
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            Int(!isnothing(bias)),
+            Int(!isnothing(mask)),
+            Int(!isnothing(q_lengths)),
+            Int(!isnothing(kv_lengths)),
+        ]),
+    )
+    !isnothing(d_bias) && push!(op_ty_results, d_bias)
+    !isnothing(is_causal) && push!(attributes, NamedAttribute("is_causal", is_causal))
+
+    return create_operation(
+        "enzymexla.ml.attention_grad",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`ml_attention`
+
+Computes scaled dot-product attention in BTNH layout:
+- query: (B, T, N_q, D_qk)
+- key: (B, S, N_kv, D_qk)
+- value: (B, S, N_kv, D_v)
+- bias (optional): broadcastable to (B, N_q, T, S)
+- mask (optional): boolean tensor (i1) broadcastable to (B, N_q, T, S), where true means attend and false means mask out (-inf)
+- q_lengths (optional): (B,) integer tensor of valid query sequence lengths
+- kv_lengths (optional): (B,) integer tensor of valid key/value sequence lengths
+
+Returns:
+- output: (B, T, N_q, D_v)
+- lse: (B, N_q, T) log-sum-exp of attention scores per query
+"""
+function ml_attention(
+    query::Value,
+    key::Value,
+    value::Value,
+    bias=nothing::Union{Nothing,Value};
+    mask=nothing::Union{Nothing,Value},
+    q_lengths=nothing::Union{Nothing,Value},
+    kv_lengths=nothing::Union{Nothing,Value},
+    output::IR.Type,
+    lse::IR.Type,
+    scale,
+    is_causal=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[output, lse]
+    operands = Value[query, key, value]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("scale", scale),]
+    !isnothing(bias) && push!(operands, bias)
+    !isnothing(mask) && push!(operands, mask)
+    !isnothing(q_lengths) && push!(operands, q_lengths)
+    !isnothing(kv_lengths) && push!(operands, kv_lengths)
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1,
+            1,
+            1,
+            Int(!isnothing(bias)),
+            Int(!isnothing(mask)),
+            Int(!isnothing(q_lengths)),
+            Int(!isnothing(kv_lengths)),
+        ]),
+    )
+    !isnothing(is_causal) && push!(attributes, NamedAttribute("is_causal", is_causal))
+
+    return create_operation(
+        "enzymexla.ml.attention",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function barrier(indices::Vector{Value}; location=Location())
     op_ty_results = IR.Type[]
     operands = Value[indices...,]
@@ -317,6 +446,36 @@ function cacheload(
     )
 end
 
+"""
+`math_celu`
+
+Continuously differentiable exponential linear unit (Barron, 2017):
+
+  celu(x) = x                            if x > 0
+          = alpha * (exp(x / alpha) - 1) otherwise
+"""
+function math_celu(
+    input::Value; result=nothing::Union{Nothing,IR.Type}, alpha, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("alpha", alpha),]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.math.celu",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
 function comm_region(; result_0::Vector{IR.Type}, body::Region, location=Location())
     op_ty_results = IR.Type[result_0...,]
     operands = Value[]
@@ -348,6 +507,40 @@ function math_cosc(
 
     return create_operation(
         "enzymexla.math.cosc",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`math_elu`
+
+Exponential linear unit:
+
+  elu(x) = x                    if x > 0
+         = alpha * (exp(x) - 1) otherwise
+
+Keeping this as a single op (rather than a select over an exponential)
+lets the derivative avoid evaluating exp on the positive branch, where it
+would overflow and poison the gradient with 0 * inf = NaN.
+"""
+function math_elu(
+    input::Value; result=nothing::Union{Nothing,IR.Type}, alpha, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("alpha", alpha),]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.math.elu",
         location;
         operands,
         owned_regions,
@@ -1042,6 +1235,111 @@ function jit_call(
 
     return create_operation(
         "enzymexla.jit_call",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`jit_region`
+
+Runs its single block on mutable buffers holding the values of its tensor
+inputs. The block has one memref argument per input, with the input\'s
+shape and element type; on entry it holds the input\'s contents. The block
+may read and write these buffers freely: the input tensors are values and
+are never modified.
+
+Each result holds the contents of one of the buffers when the block exits,
+and has the type of the corresponding input. As for `jit_call`, every
+result maps to an input through an entry of `output_operand_aliases`: the
+result `output_tuple_indices[0]` (or the only result, with empty
+`output_tuple_indices`) is read from the buffer of the input
+`operand_index`. The buffer of an input is read by at most one result.
+
+`operand_attrs` and `result_attrs`, if present, hold one dictionary of
+attributes per input and per result respectively. `arg_attrs`, if present,
+holds one dictionary of attributes per block argument, like the argument
+attributes of a function: e.g. `llvm.readonly` states that the block never
+writes the buffer.
+
+The body is an affine scope and an automatic allocation scope, as the body
+of a function is: its arguments are valid affine symbols, and its allocas
+are freed when it exits.
+
+# Example
+
+```mlir
+%r:2 = \"enzymexla.jit_region\"(%a, %b) <{
+  output_operand_aliases = [
+    #stablehlo.output_operand_alias<output_tuple_indices = [0],
+                                    operand_index = 0,
+                                    operand_tuple_indices = []>,
+    #stablehlo.output_operand_alias<output_tuple_indices = [1],
+                                    operand_index = 1,
+                                    operand_tuple_indices = []>
+  ]
+}> ({
+^bb0(%ma: memref<4xf32, 1>, %mb: memref<4xf32, 1>):
+  ...
+  \"enzymexla.jit_region_yield\"() : () -> ()
+}) : (tensor<4xf32>, tensor<4xf32>) -> (tensor<4xf32>, tensor<4xf32>)
+```
+"""
+function jit_region(
+    inputs::Vector{Value};
+    result_0::Vector{IR.Type},
+    operand_layouts=nothing,
+    operand_attrs=nothing,
+    arg_attrs=nothing,
+    result_attrs=nothing,
+    output_operand_aliases=nothing,
+    xla_side_effect_free=nothing,
+    body::Region,
+    location=Location(),
+)
+    op_ty_results = IR.Type[result_0...,]
+    operands = Value[inputs...,]
+    owned_regions = Region[body,]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(operand_layouts) &&
+        push!(attributes, NamedAttribute("operand_layouts", operand_layouts))
+    !isnothing(operand_attrs) &&
+        push!(attributes, NamedAttribute("operand_attrs", operand_attrs))
+    !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
+    !isnothing(result_attrs) &&
+        push!(attributes, NamedAttribute("result_attrs", result_attrs))
+    !isnothing(output_operand_aliases) &&
+        push!(attributes, NamedAttribute("output_operand_aliases", output_operand_aliases))
+    !isnothing(xla_side_effect_free) &&
+        push!(attributes, NamedAttribute("xla_side_effect_free", xla_side_effect_free))
+
+    return create_operation(
+        "enzymexla.jit_region",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function jit_region_yield(; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.jit_region_yield",
         location;
         operands,
         owned_regions,
@@ -1996,6 +2294,39 @@ function linalg_svd(
         attributes,
         results=op_ty_results,
         result_inference=false,
+    )
+end
+
+"""
+`math_selu`
+
+Scaled exponential linear unit, with the self-normalizing constants of
+Klambauer et al. (2017):
+
+  selu(x) = lambda * x                    if x > 0
+          = lambda * alpha * (exp(x) - 1) otherwise
+
+where lambda = 1.0507009873554805 and alpha = 1.6732632423543772.
+"""
+function math_selu(
+    input::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.math.selu",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 

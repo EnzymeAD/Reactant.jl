@@ -82,6 +82,10 @@ MissingTracedValue() = MissingTracedValue(())
 
 Base.zero(::MissingTracedValue) = MissingTracedValue()
 
+# Sentinel stored in a `@trace while` loop slot for a variable that is not defined before
+# the loop. A dedicated type is needed since `nothing` is a valid value for a variable.
+struct UndefValue end
+
 const SPECIAL_SYMBOLS = [
     :(:), :nothing, :missing, :Inf, :Inf16, :Inf32, :Inf64, :Base, :Core
 ]
@@ -275,12 +279,12 @@ The behavior of loops can be configured with the following configuration options
 
  - `track_numbers::Union{Bool,DataType} = true` - whether Julia numbers should be automatically promoted to traced numbers upon entering the loop.
  - `checkpointing::Union{Bool,Periodic,Binomial} = false` - whether or not to enable checkpointing when performing reverse mode differentiation. Can be `false` (default), `true` (automatic checkpointing), or `Periodic(n)` to specify `n` checkpoints. When `true` is used, defaults to `isqrt(num_iters)` checkpoints for `for` loops with static (non-traced) bounds. `Periodic(n)` must be used for `while` loops or `for` loops with dynamic (traced) bounds when checkpointing is enabled.
- - `mincut::Bool = false` - whether or not to enable the mincut algorithm when performing reverse mode differentiation (default: `false`).
+ - `mincut::Bool = true` - whether or not to enable the mincut algorithm when performing reverse mode differentiation (default: `true`).
 """
 macro trace(args...)
     track_numbers = true
     checkpointing = false
-    mincut = false
+    mincut = true
 
     expr = first(args)
     while length(args) > 1
@@ -473,7 +477,25 @@ cond_val(s) = :(@isdefined($s) ? $s : $MissingTracedValue())
 # arguments resolves the binding, which breaks a later top-level assignment of an implicitly
 # imported name (e.g. `π = @jit f(x)` where `f` has a local `π`).
 @noinline Base.@constprop :none function is_global_value(mod::Module, s::Symbol, val)
-    return isdefined(mod, s) && val === getglobal(mod, s)
+    return isdefined(mod, s) &&
+           (val isa Union{Function,Type} || Base.isconst(mod, s)) &&
+           val === getglobal(mod, s)
+end
+
+function flatten_symbols_state!(state::ExpressionExplorer.SymbolsState)
+    for inner in values(state.funcdefs)
+        flatten_symbols_state!(inner)
+        union!(state.references, inner.references)
+        union!(state.assignments, inner.assignments)
+        union!(state.funccalls, inner.funccalls)
+        union!(state.macrocalls, inner.macrocalls)
+    end
+    empty!(state.funcdefs)
+    return state
+end
+
+function compute_symbols_state(ex)
+    return flatten_symbols_state!(ExpressionExplorer.compute_symbols_state(ex))
 end
 
 function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=nothing)
@@ -492,8 +514,8 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
         )
     end
 
-    cond_symbols = ExpressionExplorer.compute_symbols_state(cond)
-    body_symbols = ExpressionExplorer.compute_symbols_state(body)
+    cond_symbols = compute_symbols_state(cond)
+    body_symbols = compute_symbols_state(body)
 
     external_syms = Symbol[]
     if !isnothing(first_arg)
@@ -517,16 +539,14 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
     args_names = Expr(:tuple, external_syms...)
 
     function loop_init_val(s)
-        s ∈ body_symbols.assignments || return :(@isdefined($s) ? $s : nothing)
+        s ∈ body_symbols.assignments || return :(@isdefined($s) ? $s : $(UndefValue)())
         return :(
             if $(Expr(:islocal, s)) && @isdefined($s)
                 $s
-            elseif @isdefined($s) && !(
-                $s isa Union{Function,Type} && $is_global_value($mod, $(QuoteNode(s)), $s)
-            )
+            elseif @isdefined($s) && !$is_global_value($mod, $(QuoteNode(s)), $s)
                 $s
             else
-                nothing
+                $(UndefValue)()
             end
         )
     end
@@ -537,19 +557,22 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
 
     local_names = Expr(:block, external_syms...)
     to_locals = Expr(
-        :block, [:(
-            if !isnothing($ref[])
+        :block,
+        [:(
+            if !($ref[] isa $(UndefValue))
                 $s = $ref[]
             end
-        ) for (s, ref) in zip(external_syms, ref_syms)]...
+        ) for (s, ref) in zip(external_syms, ref_syms)]...,
     )
-    from_locals = [(
-        quote
-            if !isnothing($ref[])
-                $ref[] = $s
+    from_locals = [
+        (
+            quote
+                if !($ref[] isa $(UndefValue))
+                    $ref[] = $s
+                end
             end
-        end
-    ) for (s, ref) in zip(external_syms, ref_syms)]
+        ) for (s, ref) in zip(external_syms, ref_syms)
+    ]
 
     body_fn_sym = gensym(:body_fn)
     cond_fn_sym = gensym(:cond_fn)
@@ -558,7 +581,7 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
     assigned_syms = body_symbols.assignments
     rebind_outputs = [
         quote
-            if !isnothing($(args_sym)[$i][])
+            if !($(args_sym)[$i][] isa $(UndefValue))
                 $s = $(args_sym)[$i][]
             end
         end for (i, s) in enumerate(external_syms) if s ∈ assigned_syms
@@ -803,7 +826,7 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
 
     expr_args = filter(a -> !isa(a, Core.LineNumberNode), expr.args)
     cond_expr = remove_shortcircuiting(expr_args[1])
-    condition_vars = [ExpressionExplorer.compute_symbols_state(cond_expr).references...]
+    condition_vars = [compute_symbols_state(cond_expr).references...]
 
     true_block = if store_last_line !== nothing
         if expr_args[2] isa Expr
@@ -826,12 +849,10 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
         end
     end
 
-    true_branch_symbols = ExpressionExplorer.compute_symbols_state(original_expr.args[2])
+    true_branch_symbols = compute_symbols_state(original_expr.args[2])
     true_branch_input_list = [true_branch_symbols.references...]
     filter!(x -> x ∉ SPECIAL_SYMBOLS && !is_gensym(x), true_branch_input_list)
-    true_branch_assignments = [
-        ExpressionExplorer.compute_symbols_state(true_block).assignments...
-    ]
+    true_branch_assignments = [compute_symbols_state(true_block).assignments...]
     filter!(!is_gensym, true_branch_assignments)
     true_branch_fn_name = gensym(:true_branch)
 
@@ -874,14 +895,12 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
         end
     end
 
-    false_branch_symbols = ExpressionExplorer.compute_symbols_state(
+    false_branch_symbols = compute_symbols_state(
         length(original_expr.args) > 2 ? original_expr.args[3] : Expr(:block)
     )
     false_branch_input_list = [false_branch_symbols.references...]
     filter!(x -> x ∉ SPECIAL_SYMBOLS && !is_gensym(x), false_branch_input_list)
-    false_branch_assignments = [
-        ExpressionExplorer.compute_symbols_state(false_block).assignments...
-    ]
+    false_branch_assignments = [compute_symbols_state(false_block).assignments...]
     filter!(!is_gensym, false_branch_assignments)
     false_branch_fn_name = gensym(:false_branch)
 

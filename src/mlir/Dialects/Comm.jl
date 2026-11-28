@@ -282,7 +282,7 @@ function mpi_waitall(requests::Vector{Value}; location=Location())
     )
 end
 
-function nccl_all_reduce(
+function nccl_allreduce(
     sendbuf::Value, comm::Value; recvbuf::IR.Type, reduceOp, location=Location()
 )
     op_ty_results = IR.Type[recvbuf,]
@@ -292,7 +292,26 @@ function nccl_all_reduce(
     attributes = NamedAttribute[NamedAttribute("reduceOp", reduceOp),]
 
     return create_operation(
-        "comm.nccl.all_reduce",
+        "comm.nccl.allreduce",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function nccl_barrier(comm::Value; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[comm,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "comm.nccl.barrier",
         location;
         operands,
         owned_regions,
@@ -459,6 +478,44 @@ function nccl_comm_user_rank(comm::Value; user_rank::IR.Type, location=Location(
     )
 end
 
+function nccl_get_comm_world(; comm::IR.Type, location=Location())
+    op_ty_results = IR.Type[comm,]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "comm.nccl.get_comm_world",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function nccl_group(; results::Vector{IR.Type}, region::Region, location=Location())
+    op_ty_results = IR.Type[results...,]
+    operands = Value[]
+    owned_regions = Region[region,]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "comm.nccl.group",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function nccl_recv(peer::Value, comm::Value; recvbuff::IR.Type, location=Location())
     op_ty_results = IR.Type[recvbuff,]
     operands = Value[peer, comm]
@@ -487,6 +544,25 @@ function nccl_send(sendbuff::Value, peer::Value, comm::Value; location=Location(
 
     return create_operation(
         "comm.nccl.send",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function nccl_yield(values::Vector{Value}; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[values...,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "comm.nccl.yield",
         location;
         operands,
         owned_regions,

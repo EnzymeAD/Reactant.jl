@@ -777,9 +777,9 @@ function extract_mean_step_time_from_overview_page(xplane_file::String, ::Int)
 end
 
 function extract_mean_step_time_from_hlo_op_profile(xplane_file::String, nrepeat::Int)
-    data = JSON.parse(xspace_to_tools_data([xplane_file], "op_profile")[1])
-    picosec = data["byProgram"]["metrics"]["normalizedTimePs"]
-    return (picosec ÷ 1000) ÷ nrepeat
+    metrics = get_aggregate_metrics(xplane_file, nrepeat)
+    (metrics === nothing || metrics.normalized_time_ps <= 0) && return nothing
+    return (round(Int64, metrics.normalized_time_ps) ÷ 1000) ÷ nrepeat
 end
 
 # Bind to port 0 to let the OS assign a free port
@@ -960,6 +960,7 @@ function Base.getproperty(
 )
     if name == :raw_flops_rate || name == :bf16_flops_rate
         rawtime_s = getfield(summary, :raw_time) * 1e-12
+        iszero(rawtime_s) && return 0.0
         name_sym = name == :raw_flops_rate ? :raw_flops : :bf16_flops
         return getfield(summary, name_sym) / rawtime_s
     end
@@ -1011,11 +1012,852 @@ function Base.show(io::IO, flops::Proto.tensorflow.profiler.op_profile.Metrics)
     return nothing
 end
 
+const _HLO_CONTAINER_OPCODES = Set{String}([
+    "while", "conditional", "call", "async-start", "async-update", "async-done"
+])
+
+const _HLO_ELEMENTWISE_FLOP_OPCODES = Set{String}([
+    "abs",
+    "add",
+    "and",
+    "ceil",
+    "clamp",
+    "clz",
+    "compare",
+    "complex",
+    "convert",
+    "divide",
+    "floor",
+    "fma",
+    "imag",
+    "is-finite",
+    "maximum",
+    "minimum",
+    "multiply",
+    "negate",
+    "not",
+    "or",
+    "population-count",
+    "real",
+    "reduce-precision",
+    "rem",
+    "round-nearest-afz",
+    "round-nearest-even",
+    "select",
+    "shift-left",
+    "shift-right-arithmetic",
+    "shift-right-logical",
+    "sign",
+    "stochastic-convert",
+    "subtract",
+    "xor",
+])
+
+const _EMPTY_DESCENDANT_NAMES = Set{String}()
+
+struct _HloInstCost
+    opcode::String
+    flops::Int64
+    bf16_flops::Float64
+    bytes_accessed::Int64
+    is_container::Bool
+    descendant_names::Set{String}
+end
+
+function _instruction_backend_config_bytes(
+    ins::Proto.xla.HloInstructionProto, hm::Proto.xla.HloModuleProto
+)
+    payload = ins.backend_config_payload
+    if payload !== nothing && payload.payload_source !== nothing
+        src = payload.payload_source
+        if src.name === :value
+            return src[]::Vector{UInt8}
+        elseif src.name === :id
+            idx = (src[]::Int64) + 1
+            if 1 <= idx <= length(hm.payloads)
+                return hm.payloads[idx]
+            end
+        end
+    end
+    return ins.backend_config
+end
+
+function _while_known_trip_count(
+    ins::Proto.xla.HloInstructionProto, hm::Proto.xla.HloModuleProto
+)
+    raw = _instruction_backend_config_bytes(ins, hm)
+    isempty(raw) && return nothing
+    parsed = try
+        JSON.parse(String(copy(raw)))
+    catch
+        nothing
+    end
+    parsed isa AbstractDict || return nothing
+    for cfg in (
+        parsed,
+        get(parsed, "while_backend_config", nothing),
+        get(parsed, "whileBackendConfig", nothing),
+    )
+        cfg isa AbstractDict || continue
+        ktc = get(cfg, "known_trip_count", get(cfg, "knownTripCount", nothing))
+        if ktc isa AbstractDict && haskey(ktc, "n")
+            return _to_int64_stat(ktc["n"])
+        end
+    end
+    return nothing
+end
+
+function _primitive_type_bits(t::Proto.xla.PrimitiveType.T)
+    PT = Proto.xla.PrimitiveType
+    (t == PT.S1 || t == PT.U1) && return Int64(1)
+    (t == PT.S2 || t == PT.U2) && return Int64(2)
+    (t == PT.S4 || t == PT.U4 || t == PT.F4E2M1FN) && return Int64(4)
+    (t == PT.F6E3M2FN || t == PT.F6E2M3FN) && return Int64(6)
+    if (
+        t == PT.PRED ||
+        t == PT.S8 ||
+        t == PT.U8 ||
+        t == PT.F8E5M2 ||
+        t == PT.F8E4M3 ||
+        t == PT.F8E4M3FN ||
+        t == PT.F8E4M3B11FNUZ ||
+        t == PT.F8E3M4 ||
+        t == PT.F8E5M2FNUZ ||
+        t == PT.F8E4M3FNUZ ||
+        t == PT.F8E8M0FNU
+    )
+        return Int64(8)
+    end
+    (t == PT.S16 || t == PT.U16 || t == PT.F16 || t == PT.BF16) && return Int64(16)
+    (t == PT.S32 || t == PT.U32 || t == PT.F32) && return Int64(32)
+    (t == PT.S64 || t == PT.U64 || t == PT.F64 || t == PT.C64) && return Int64(64)
+    t == PT.C128 && return Int64(128)
+    return Int64(0)
+end
+
+function _bf16_flop_scale(bits::Int64)
+    bits <= 0 && return 1.0
+    return bits < 16 ? bits / 16.0 : 1.0
+end
+
+function _shape_elements(shape::Union{Nothing,Proto.xla.ShapeProto})
+    shape === nothing && return Int64(0)
+    _primitive_type_bits(shape.element_type) == 0 && return Int64(0)
+    return prod(shape.dimensions; init=Int64(1))
+end
+
+function _leaf_array_elements(shape::Union{Nothing,Proto.xla.ShapeProto})
+    shape === nothing && return Int64(0)
+    if shape.element_type == Proto.xla.PrimitiveType.TUPLE
+        return sum(_leaf_array_elements(s) for s in shape.tuple_shapes; init=Int64(0))
+    end
+    return _shape_elements(shape)
+end
+
+function _shape_byte_size(shape::Union{Nothing,Proto.xla.ShapeProto})
+    shape === nothing && return Int64(0)
+    if shape.element_type == Proto.xla.PrimitiveType.TUPLE
+        return sum(_shape_byte_size(s) for s in shape.tuple_shapes; init=Int64(0))
+    end
+    bits = _primitive_type_bits(shape.element_type)
+    bits == 0 && return Int64(0)
+    return cld(_shape_elements(shape) * bits, Int64(8))
+end
+
+function _dot_flops(
+    lhs_shape::Union{Nothing,Proto.xla.ShapeProto},
+    out_elems::Int64,
+    dnums::Union{Nothing,Proto.xla.DotDimensionNumbers},
+)
+    (lhs_shape === nothing || dnums === nothing || out_elems == 0) && return Int64(0)
+    reduction_width = Int64(1)
+    for d in dnums.lhs_contracting_dimensions
+        idx = d + 1
+        (1 <= idx <= length(lhs_shape.dimensions)) || continue
+        reduction_width *= lhs_shape.dimensions[idx]
+    end
+    return Int64(2) * out_elems * reduction_width
+end
+
+function _convolution_flops(
+    ins::Proto.xla.HloInstructionProto,
+    lhs_shape::Union{Nothing,Proto.xla.ShapeProto},
+    rhs_shape::Union{Nothing,Proto.xla.ShapeProto},
+    res_shape::Union{Nothing,Proto.xla.ShapeProto},
+)
+    dnums = ins.convolution_dimension_numbers
+    (lhs_shape === nothing || rhs_shape === nothing || res_shape === nothing) &&
+        return Int64(0)
+    dnums === nothing && return Int64(0)
+
+    in_feat = lhs_shape.dimensions[dnums.input_feature_dimension + 1]
+    out_feat = res_shape.dimensions[dnums.output_feature_dimension + 1]
+    batch = lhs_shape.dimensions[dnums.input_batch_dimension + 1]
+
+    wdims = ins.window === nothing ? Proto.xla.WindowDimension[] : ins.window.dimensions
+    valid_product = Int64(1)
+    if !isempty(wdims)
+        for (sdim, wdim) in enumerate(wdims)
+            in_lim = lhs_shape.dimensions[dnums.input_spatial_dimensions[sdim] + 1]
+            ker_lim = rhs_shape.dimensions[dnums.kernel_spatial_dimensions[sdim] + 1]
+            out_lim = res_shape.dimensions[dnums.output_spatial_dimensions[sdim] + 1]
+            stride = max(Int64(1), wdim.stride)
+            wdil = max(Int64(1), wdim.window_dilation)
+            bdil = max(Int64(1), wdim.base_dilation)
+            pad_low = wdim.padding_low
+
+            valid_count = Int64(0)
+            for kidx in 0:(ker_lim - 1)
+                if stride == 1 && bdil == 1
+                    base = pad_low - kidx * wdil
+                    valid_count += max(
+                        Int64(0), min(in_lim + base, out_lim) - max(base, Int64(0))
+                    )
+                else
+                    for oidx in 0:(out_lim - 1)
+                        undil = oidx * stride - pad_low + kidx * wdil
+                        undil < 0 && continue
+                        rem(undil, bdil) != 0 && continue
+                        lidx = div(undil, bdil)
+                        (0 <= lidx < in_lim) && (valid_count += 1)
+                    end
+                end
+            end
+            valid_product *= valid_count
+        end
+    end
+
+    fg = max(Int64(1), ins.feature_group_count)
+    bg = max(Int64(1), ins.batch_group_count)
+    fma_count = div(in_feat, fg) * out_feat * div(batch, bg) * valid_product
+    return Int64(2) * fma_count
+end
+
+function _hlo_module_instruction_costs(hm::Proto.xla.HloModuleProto)
+    comp_by_id = Dict{Int64,Proto.xla.HloComputationProto}(
+        c.id => c for c in hm.computations
+    )
+    comp_flops_cache = Dict{Int64,Tuple{Int64,Float64}}()
+    visiting = Set{Int64}()
+    desc_names_cache = Dict{Int64,Set{String}}()
+    desc_visiting = Set{Int64}()
+
+    function subcomp_descendant_names(comp_id::Int64)
+        haskey(desc_names_cache, comp_id) && return desc_names_cache[comp_id]
+        if !haskey(comp_by_id, comp_id) || comp_id in desc_visiting
+            return _EMPTY_DESCENDANT_NAMES
+        end
+        push!(desc_visiting, comp_id)
+        comp = comp_by_id[comp_id]
+        names = Set{String}()
+        if !comp.is_fusion_computation
+            for child in comp.instructions
+                !isempty(child.name) && push!(names, child.name)
+                for cid in child.called_computation_ids
+                    union!(names, subcomp_descendant_names(cid))
+                end
+            end
+        end
+        delete!(desc_visiting, comp_id)
+        desc_names_cache[comp_id] = names
+        return names
+    end
+
+    function subcomp_flops(comp_id::Int64)
+        haskey(comp_flops_cache, comp_id) && return comp_flops_cache[comp_id]
+        (!haskey(comp_by_id, comp_id) || comp_id in visiting) && return (Int64(0), 0.0)
+        push!(visiting, comp_id)
+        comp = comp_by_id[comp_id]
+        ins_by_id = Dict{Int64,Proto.xla.HloInstructionProto}(
+            ins.id => ins for ins in comp.instructions
+        )
+        total_f = Int64(0)
+        total_bf16 = 0.0
+        for ins in comp.instructions
+            c = inst_cost(ins, ins_by_id)
+            total_f += c.flops
+            total_bf16 += c.bf16_flops
+        end
+        delete!(visiting, comp_id)
+        comp_flops_cache[comp_id] = (total_f, total_bf16)
+        return (total_f, total_bf16)
+    end
+
+    function operand_shape(
+        ins::Proto.xla.HloInstructionProto,
+        idx::Int,
+        ins_by_id::Dict{Int64,Proto.xla.HloInstructionProto},
+    )
+        idx <= length(ins.operand_ids) || return nothing
+        op_ins = get(ins_by_id, ins.operand_ids[idx], nothing)
+        return op_ins === nothing ? nothing : op_ins.shape
+    end
+
+    function default_bytes(
+        ins::Proto.xla.HloInstructionProto,
+        ins_by_id::Dict{Int64,Proto.xla.HloInstructionProto},
+    )
+        op = ins.opcode
+        if (
+            op == "parameter" ||
+            op == "constant" ||
+            op == "bitcast" ||
+            op == "get-tuple-element" ||
+            op == "after-all" ||
+            op == "add-dependency"
+        )
+            return Int64(0)
+        elseif op == "slice"
+            return Int64(2) * _shape_byte_size(ins.shape)
+        elseif op == "infeed"
+            return _shape_byte_size(ins.shape)
+        elseif op == "outfeed"
+            total = Int64(0)
+            for i in 1:length(ins.operand_ids)
+                total += _shape_byte_size(operand_shape(ins, i, ins_by_id))
+            end
+            return total
+        end
+        bytes = _shape_byte_size(ins.shape)
+        for i in 1:length(ins.operand_ids)
+            bytes += _shape_byte_size(operand_shape(ins, i, ins_by_id))
+        end
+        return bytes
+    end
+
+    function inst_cost(
+        ins::Proto.xla.HloInstructionProto,
+        ins_by_id::Dict{Int64,Proto.xla.HloInstructionProto},
+    )
+        op = ins.opcode
+        if op in _HLO_CONTAINER_OPCODES
+            dnames = Set{String}()
+            for cid in ins.called_computation_ids
+                union!(dnames, subcomp_descendant_names(cid))
+            end
+            c_flops = Int64(0)
+            c_bf16 = 0.0
+            c_bytes = default_bytes(ins, ins_by_id)
+            if (op == "call" || op == "async-start") && !isempty(ins.called_computation_ids)
+                (c_flops, c_bf16) = subcomp_flops(ins.called_computation_ids[1])
+            elseif op == "while" && length(ins.called_computation_ids) >= 2
+                (body_f, body_bf16) = subcomp_flops(ins.called_computation_ids[1])
+                (cond_f, cond_bf16) = subcomp_flops(ins.called_computation_ids[2])
+                trip = _while_known_trip_count(ins, hm)
+                if trip !== nothing && trip >= 0
+                    c_flops = trip * body_f + (trip + 1) * cond_f
+                    c_bf16 = trip * body_bf16 + (trip + 1) * cond_bf16
+                else
+                    c_flops = body_f + cond_f
+                    c_bf16 = body_bf16 + cond_bf16
+                end
+            elseif op == "conditional" && !isempty(ins.called_computation_ids)
+                for cid in ins.called_computation_ids
+                    (bf, bbf16) = subcomp_flops(cid)
+                    c_flops = max(c_flops, bf)
+                    c_bf16 = max(c_bf16, bbf16)
+                end
+            elseif op == "async-update" || op == "async-done"
+                c_bytes = Int64(0)
+            end
+            return _HloInstCost(op, c_flops, c_bf16, c_bytes, true, dnames)
+        elseif op == "fusion"
+            (f, bf16) = if isempty(ins.called_computation_ids)
+                (Int64(0), 0.0)
+            else
+                subcomp_flops(ins.called_computation_ids[1])
+            end
+            return _HloInstCost(
+                op, f, bf16, default_bytes(ins, ins_by_id), false, _EMPTY_DESCENDANT_NAMES
+            )
+        end
+
+        out_bits =
+            ins.shape === nothing ? Int64(0) : _primitive_type_bits(ins.shape.element_type)
+        scale = _bf16_flop_scale(out_bits)
+        flops = Int64(0)
+        bf16 = 0.0
+
+        if op in _HLO_ELEMENTWISE_FLOP_OPCODES
+            elems = _shape_elements(ins.shape)
+            flops = op == "fma" ? Int64(2) * elems : elems
+            bf16 = flops * scale
+        elseif op == "dot" || op == "dot-general" || op == "scaled-dot"
+            lhs = operand_shape(ins, 1, ins_by_id)
+            rhs = operand_shape(ins, 2, ins_by_id)
+            flops = _dot_flops(lhs, _shape_elements(ins.shape), ins.dot_dimension_numbers)
+            lhs_bits = lhs === nothing ? out_bits : _primitive_type_bits(lhs.element_type)
+            rhs_bits = rhs === nothing ? out_bits : _primitive_type_bits(rhs.element_type)
+            bf16 = flops * _bf16_flop_scale(min(lhs_bits, rhs_bits))
+        elseif op == "ragged-dot"
+            lhs = operand_shape(ins, 1, ins_by_id)
+            rhs = operand_shape(ins, 2, ins_by_id)
+            rdnums = ins.ragged_dot_dimension_numbers
+            if rdnums !== nothing && ins.shape !== nothing
+                dims = copy(ins.shape.dimensions)
+                for i in 0:(length(rdnums.rhs_group_dimensions) - 1)
+                    (i + 1 <= length(dims)) && deleteat!(dims, i + 1)
+                end
+                out_elems = if _primitive_type_bits(ins.shape.element_type) == 0
+                    Int64(0)
+                else
+                    prod(dims; init=Int64(1))
+                end
+                flops = _dot_flops(lhs, out_elems, rdnums.dot_dimension_numbers)
+            end
+            lhs_bits = lhs === nothing ? out_bits : _primitive_type_bits(lhs.element_type)
+            rhs_bits = rhs === nothing ? out_bits : _primitive_type_bits(rhs.element_type)
+            bf16 = flops * _bf16_flop_scale(min(lhs_bits, rhs_bits))
+        elseif op == "convolution"
+            lhs = operand_shape(ins, 1, ins_by_id)
+            rhs = operand_shape(ins, 2, ins_by_id)
+            flops = _convolution_flops(ins, lhs, rhs, ins.shape)
+            lhs_bits = lhs === nothing ? out_bits : _primitive_type_bits(lhs.element_type)
+            rhs_bits = rhs === nothing ? out_bits : _primitive_type_bits(rhs.element_type)
+            bf16 = flops * _bf16_flop_scale(min(lhs_bits, rhs_bits))
+        elseif op == "fft"
+            real_shape = if ins.fft_type == Proto.xla.FftType.IRFFT
+                ins.shape
+            else
+                operand_shape(ins, 1, ins_by_id)
+            end
+            log_factors = prod(
+                floor(Int64, log2(max(d, Int64(1)))) for d in ins.fft_length; init=Int64(1)
+            )
+            flops = Int64(8) * log_factors * _shape_elements(real_shape)
+            bf16 = flops * scale
+        elseif op == "triangular-solve"
+            lhs = operand_shape(ins, 1, ins_by_id)
+            rhs = operand_shape(ins, 2, ins_by_id)
+            if lhs !== nothing && !isempty(lhs.dimensions)
+                flops = Int64(2) * lhs.dimensions[end] * _shape_elements(rhs)
+                bf16 = flops * scale
+            end
+        elseif op == "cholesky"
+            lhs = operand_shape(ins, 1, ins_by_id)
+            if lhs !== nothing && !isempty(lhs.dimensions)
+                flops = div(lhs.dimensions[end] * _shape_elements(lhs), Int64(3))
+                bf16 = flops * scale
+            end
+        elseif op == "sort"
+            op0 = operand_shape(ins, 1, ins_by_id)
+            n = _shape_elements(op0)
+            flops = n * ceil(Int64, log2(max(n, Int64(1))))
+            bf16 = flops * scale
+        elseif op == "all-reduce" || op == "all-reduce-start"
+            flops = _leaf_array_elements(ins.shape)
+            bf16 = Float64(flops)
+        elseif op == "reduce" && !isempty(ins.called_computation_ids)
+            arg0 = operand_shape(ins, 1, ins_by_id)
+            out0 =
+                if ins.shape !== nothing &&
+                    ins.shape.element_type == Proto.xla.PrimitiveType.TUPLE &&
+                    !isempty(ins.shape.tuple_shapes)
+                    ins.shape.tuple_shapes[1]
+                else
+                    ins.shape
+                end
+            rcount = max(Int64(0), _shape_elements(arg0) - _shape_elements(out0))
+            (sf, sbf16) = subcomp_flops(ins.called_computation_ids[1])
+            flops = rcount * sf
+            bf16 = rcount * sbf16
+        elseif op == "reduce-window" && !isempty(ins.called_computation_ids)
+            out0 =
+                if ins.shape !== nothing &&
+                    ins.shape.element_type == Proto.xla.PrimitiveType.TUPLE &&
+                    !isempty(ins.shape.tuple_shapes)
+                    ins.shape.tuple_shapes[1]
+                else
+                    ins.shape
+                end
+            wdims =
+                ins.window === nothing ? Proto.xla.WindowDimension[] : ins.window.dimensions
+            welems = prod(d.size for d in wdims; init=Int64(1))
+            rcount = max(Int64(0), welems - 1) * _shape_elements(out0)
+            (sf, sbf16) = subcomp_flops(ins.called_computation_ids[1])
+            flops = rcount * sf
+            bf16 = rcount * sbf16
+        elseif op == "select-and-scatter" && length(ins.called_computation_ids) >= 2
+            src = operand_shape(ins, 2, ins_by_id)
+            src_elems = _shape_elements(src)
+            wdims =
+                ins.window === nothing ? Proto.xla.WindowDimension[] : ins.window.dimensions
+            welems = prod(d.size for d in wdims; init=Int64(1))
+            (sel_f, sel_bf16) = subcomp_flops(ins.called_computation_ids[1])
+            (sca_f, sca_bf16) = subcomp_flops(ins.called_computation_ids[2])
+            flops = src_elems * (max(Int64(0), welems - 1) * sel_f + sca_f)
+            bf16 = src_elems * (max(Int64(0), welems - 1) * sel_bf16 + sca_bf16)
+        elseif op == "scatter" && !isempty(ins.called_computation_ids)
+            num_inputs = max(1, fld(length(ins.operand_ids), 2))
+            upd_elems = _shape_elements(operand_shape(ins, num_inputs + 2, ins_by_id))
+            (sf, sbf16) = subcomp_flops(ins.called_computation_ids[1])
+            flops = upd_elems * sf
+            bf16 = upd_elems * sbf16
+        elseif (op == "map" || op == "scan") && !isempty(ins.called_computation_ids)
+            elems = if op == "map"
+                _shape_elements(ins.shape)
+            else
+                _shape_elements(operand_shape(ins, 1, ins_by_id))
+            end
+            (sf, sbf16) = subcomp_flops(ins.called_computation_ids[1])
+            flops = elems * sf
+            bf16 = elems * sbf16
+        end
+
+        return _HloInstCost(
+            op, flops, bf16, default_bytes(ins, ins_by_id), false, _EMPTY_DESCENDANT_NAMES
+        )
+    end
+
+    costs = Dict{String,_HloInstCost}()
+    for comp in hm.computations
+        #Fused sub-computations do not emit standalone CPU thunk events; if an instruction
+        #shares a short name across fused and unfused computations, prefer the unfused one.
+        ins_by_id = Dict{Int64,Proto.xla.HloInstructionProto}(
+            ins.id => ins for ins in comp.instructions
+        )
+        for ins in comp.instructions
+            c = inst_cost(ins, ins_by_id)
+            if !comp.is_fusion_computation || !haskey(costs, ins.name)
+                costs[ins.name] = c
+            end
+        end
+    end
+    return costs
+end
+
+function _to_int64_stat(v)
+    v isa Signed && return Int64(v)
+    v isa Unsigned && return reinterpret(Int64, UInt64(v))
+    if v isa AbstractString
+        parsed = tryparse(Int64, v)
+        parsed !== nothing && return parsed
+        uparsed = tryparse(UInt64, v)
+        uparsed !== nothing && return reinterpret(Int64, uparsed)
+    end
+    return nothing
+end
+
+function _merge_intervals_ps!(intervals::Vector{Tuple{Int64,Int64}})
+    isempty(intervals) && return Int64(0)
+    sort!(intervals; by=first)
+    total_ps = Int64(0)
+    cur_s, cur_e = intervals[1]
+    for i in 2:length(intervals)
+        s, e = intervals[i]
+        if s <= cur_e
+            cur_e = max(cur_e, e)
+        else
+            total_ps += max(Int64(0), cur_e - cur_s)
+            cur_s, cur_e = s, e
+        end
+    end
+    total_ps += max(Int64(0), cur_e - cur_s)
+    return total_ps
+end
+
+mutable struct _CpuOpAccum
+    op_name::String
+    op_type::String
+    occurrences::Int64
+    time_ps::Int64
+    flops::Int64
+    bf16_flops::Float64
+    bytes_accessed::Int64
+end
+
+function _cpu_analyze_xspace(xspace::Proto.tensorflow.profiler.XSpace, nrepeat::Int)
+    cpu_plane = nothing
+    meta_plane = nothing
+    for p in xspace.planes
+        if p.name == "/host:CPU"
+            cpu_plane = p
+        elseif p.name == "/host:metadata"
+            meta_plane = p
+        end
+    end
+    cpu_plane === nothing && return nothing
+
+    modules_by_id = Dict{Int64,Dict{String,_HloInstCost}}()
+    modules_by_name = Dict{String,Dict{String,_HloInstCost}}()
+    if meta_plane !== nothing
+        for (_, emd) in meta_plane.event_metadata
+            st = _stats(meta_plane, emd.stats)
+            hlo_bytes = get(st, "Hlo Proto", nothing)
+            hlo_bytes isa Vector{UInt8} || continue
+            hp = try
+                ProtoBuf.decode(ProtoBuf.ProtoDecoder(IOBuffer(hlo_bytes)), Proto.xla.HloProto)
+            catch
+                nothing
+            end
+            (hp === nothing || hp.hlo_module === nothing) && continue
+            hm = hp.hlo_module
+            icosts = _hlo_module_instruction_costs(hm)
+            pid = _to_int64_stat(get(st, "program_id", nothing))
+            pid !== nothing && (modules_by_id[pid] = icosts)
+            modules_by_id[hm.id] = icosts
+            !isempty(hm.name) && (modules_by_name[hm.name] = icosts)
+            !isempty(emd.name) && (modules_by_name[emd.name] = icosts)
+        end
+    end
+
+    consumer_end_ps = Dict{Tuple{Int64,Int64},Int64}()
+    hlo_events = NamedTuple{
+        (:op_name, :mod_name, :prog_id, :run_id, :start_ps, :sync_end_ps, :ctx),
+        Tuple{
+            String,
+            String,
+            Union{Nothing,Int64},
+            Union{Nothing,Int64},
+            Int64,
+            Int64,
+            Union{Nothing,Tuple{Int64,Int64}},
+        },
+    }[]
+    exec_intervals = Tuple{Int64,Int64}[]
+    bench_intervals = Tuple{Int64,Int64}[]
+
+    for line in cpu_plane.lines
+        base_ps = line.timestamp_ns * 1000
+        for ev in line.events
+            (ev.data !== nothing && ev.data.name === :offset_ps) || continue
+            md = cpu_plane.event_metadata[ev.metadata_id]
+            ev_name = isempty(md.display_name) ? md.name : md.display_name
+            start_ps = base_ps + ev.data[]
+            end_ps = start_ps + ev.duration_ps
+            st = if isempty(md.stats)
+                _stats(cpu_plane, ev.stats)
+            else
+                merge(_stats(cpu_plane, md.stats), _stats(cpu_plane, ev.stats))
+            end
+
+            if startswith(ev_name, "end: ") && haskey(st, "_c")
+                cid = _to_int64_stat(st["_c"])
+                ct = something(_to_int64_stat(get(st, "_ct", Int64(0))), Int64(0))
+                if cid !== nothing
+                    key = (ct, cid)
+                    consumer_end_ps[key] = max(get(consumer_end_ps, key, end_ps), end_ps)
+                end
+            elseif haskey(st, "hlo_op")
+                op_name = string(st["hlo_op"])
+                mod_name = string(get(st, "hlo_module", ""))
+                prog_id = _to_int64_stat(get(st, "program_id", nothing))
+                run_id = _to_int64_stat(get(st, "run_id", nothing))
+                ctx = if haskey(st, "_p")
+                    pid = _to_int64_stat(st["_p"])
+                    pt = something(_to_int64_stat(get(st, "_pt", Int64(0))), Int64(0))
+                    pid === nothing ? nothing : (pt, pid)
+                else
+                    nothing
+                end
+                push!(
+                    hlo_events,
+                    (;
+                        op_name,
+                        mod_name,
+                        prog_id,
+                        run_id,
+                        start_ps,
+                        sync_end_ps=end_ps,
+                        ctx,
+                    ),
+                )
+            elseif (
+                startswith(ev_name, "PjRtCpuExecutable::Execute") ||
+                startswith(ev_name, "CommonPjRtLoadedExecutable::Execute")
+            )
+                push!(exec_intervals, (start_ps, end_ps))
+            elseif ev_name == "bench" && haskey(st, "step_num")
+                push!(bench_intervals, (start_ps, end_ps))
+            end
+        end
+    end
+
+    function resolve_module_costs(hev)
+        if hev.prog_id !== nothing && haskey(modules_by_id, hev.prog_id)
+            return modules_by_id[hev.prog_id]
+        elseif !isempty(hev.mod_name) && haskey(modules_by_name, hev.mod_name)
+            return modules_by_name[hev.mod_name]
+        elseif length(modules_by_id) == 1
+            return first(values(modules_by_id))
+        else
+            return nothing
+        end
+    end
+
+    observed_ops_by_module = IdDict{Dict{String,_HloInstCost},Set{String}}()
+    for hev in hlo_events
+        icosts = resolve_module_costs(hev)
+        icosts === nothing && continue
+        mod_obs = get!(observed_ops_by_module, icosts) do
+            Set{String}()
+        end
+        push!(mod_obs, hev.op_name)
+    end
+
+    leaf_intervals = Tuple{Int64,Int64}[]
+    run_ids = Set{Int64}()
+    total_flops = Int64(0)
+    total_bf16_flops = 0.0
+    total_bytes = Int64(0)
+    op_accums = Dict{String,_CpuOpAccum}()
+
+    for hev in hlo_events
+        hev.run_id !== nothing && push!(run_ids, hev.run_id)
+        end_ps = if hev.ctx !== nothing && haskey(consumer_end_ps, hev.ctx)
+            max(hev.sync_end_ps, consumer_end_ps[hev.ctx])
+        else
+            hev.sync_end_ps
+        end
+        dur_ps = max(Int64(0), end_ps - hev.start_ps)
+
+        icosts = resolve_module_costs(hev)
+
+        cost = if icosts !== nothing && haskey(icosts, hev.op_name)
+            icosts[hev.op_name]
+        else
+            _HloInstCost("unknown", Int64(0), 0.0, Int64(0), false, _EMPTY_DESCENDANT_NAMES)
+        end
+
+        if cost.is_container
+            (cost.opcode == "async-update" || cost.opcode == "async-done") && continue
+            mod_obs =
+                icosts === nothing ? nothing : get(observed_ops_by_module, icosts, nothing)
+            if mod_obs !== nothing &&
+                !isempty(cost.descendant_names) &&
+                !isdisjoint(cost.descendant_names, mod_obs)
+                continue
+            end
+        end
+
+        push!(leaf_intervals, (hev.start_ps, end_ps))
+        total_flops += cost.flops
+        total_bf16_flops += cost.bf16_flops
+        total_bytes += cost.bytes_accessed
+
+        acc = get!(op_accums, hev.op_name) do
+            _CpuOpAccum(hev.op_name, cost.opcode, 0, 0, 0, 0.0, 0)
+        end
+        acc.occurrences += 1
+        acc.time_ps += dur_ps
+        acc.flops += cost.flops
+        acc.bf16_flops += cost.bf16_flops
+        acc.bytes_accessed += cost.bytes_accessed
+    end
+
+    active_time_ps = if !isempty(leaf_intervals)
+        _merge_intervals_ps!(leaf_intervals)
+    elseif !isempty(exec_intervals)
+        _merge_intervals_ps!(exec_intervals)
+    elseif !isempty(bench_intervals)
+        _merge_intervals_ps!(bench_intervals)
+    else
+        Int64(0)
+    end
+
+    (active_time_ps == 0 && isempty(hlo_events)) && return nothing
+
+    occurrences = if !isempty(run_ids)
+        length(run_ids)
+    elseif !isempty(exec_intervals)
+        length(exec_intervals)
+    else
+        max(1, nrepeat)
+    end
+
+    return (;
+        active_time_ps, total_flops, total_bf16_flops, total_bytes, occurrences, op_accums
+    )
+end
+
+function _cpu_aggregate_metrics(xplane_file::String, nrepeat::Int)
+    xspace = load_xspace(xplane_file)
+    analyzed = _cpu_analyze_xspace(xspace, nrepeat)
+    analyzed === nothing && return nothing
+    raw_time_ps = Float64(analyzed.active_time_ps)
+    occ = UInt32(analyzed.occurrences)
+    avg_time_ps = occ > 0 ? raw_time_ps / occ : 0.0
+    return Proto.tensorflow.profiler.op_profile.Metrics(
+        0.0,
+        0.0,
+        Float64[0.0, 0.0, 0.0],
+        raw_time_ps,
+        Float64(analyzed.total_flops),
+        analyzed.total_bf16_flops,
+        raw_time_ps,
+        Float64[Float64(analyzed.total_bytes), 0.0, 0.0],
+        occ,
+        avg_time_ps,
+    )
+end
+
+function _cpu_framework_op_stats(xplane_file::String)
+    xspace = load_xspace(xplane_file)
+    analyzed = _cpu_analyze_xspace(xspace, 1)
+    (analyzed === nothing || isempty(analyzed.op_accums)) &&
+        return Proto.tensorflow.profiler.TfStatsRecord[]
+
+    sorted_ops = collect(values(analyzed.op_accums))
+    sort!(sorted_ops; by=a -> (-a.time_ps, a.op_name))
+
+    total_self_ps = sum(a.time_ps for a in sorted_ops; init=Int64(0))
+    cum_frac = 0.0
+    records = Vector{Proto.tensorflow.profiler.TfStatsRecord}(undef, length(sorted_ops))
+    for (i, a) in enumerate(sorted_ops)
+        time_us = a.time_ps * 1e-6
+        avg_us = a.occurrences > 0 ? time_us / a.occurrences : 0.0
+        frac = total_self_ps > 0 ? a.time_ps / total_self_ps : 0.0
+        cum_frac += frac
+        time_ns = a.time_ps * 1e-3
+        measured_gflops = time_ns > 0 ? a.bf16_flops / time_ns : 0.0
+        model_gflops = time_ns > 0 ? a.flops / time_ns : 0.0
+        mem_bw_gibs = time_ns > 0 ? (a.bytes_accessed / time_ns) * (1e9 / (1024.0^3)) : 0.0
+        oi = a.bytes_accessed > 0 ? a.bf16_flops / a.bytes_accessed : 0.0
+        records[i] = Proto.tensorflow.profiler.TfStatsRecord(
+            UInt64(i),
+            "Host",
+            a.op_type,
+            a.op_name,
+            a.occurrences,
+            time_us,
+            avg_us,
+            time_us,
+            avg_us,
+            0.0,
+            0.0,
+            frac,
+            cum_frac,
+            measured_gflops,
+            model_gflops,
+            mem_bw_gibs,
+            oi,
+            "Unknown",
+            false,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            UInt64(max(0, a.flops)),
+            a.bf16_flops,
+            UInt64(max(0, a.bytes_accessed)),
+        )
+    end
+    return records
+end
+
 function get_aggregate_metrics(xplane_file::String, nrepeat::Int)
     raw_data = xspace_to_tools_data([xplane_file], "op_profile")[1]
     if isempty(raw_data)
         @debug "`op_profile` returned no data" xplane_file
-        return nothing
+        return _cpu_aggregate_metrics(xplane_file, nrepeat)
     end
     data = JSON.parse(raw_data)
     if !haskey(data, :byProgram) || !haskey(data[:byProgram], :metrics)
@@ -1027,20 +1869,29 @@ function get_aggregate_metrics(xplane_file::String, nrepeat::Int)
             data_available_keys,
             by_program_available_keys
         )
-        return nothing
+        return _cpu_aggregate_metrics(xplane_file, nrepeat)
+    end
+
+    m = data[:byProgram][:metrics]
+    if (
+        get(data, :deviceType, "") == "CPU_ONLY" ||
+        (iszero(m[:rawTime]) && iszero(m[:rawFlops]) && iszero(m[:occurrences]))
+    )
+        cpu_metrics = _cpu_aggregate_metrics(xplane_file, nrepeat)
+        cpu_metrics !== nothing && return cpu_metrics
     end
 
     return Proto.tensorflow.profiler.op_profile.Metrics(
-        data[:byProgram][:metrics][:flops],
-        data[:byProgram][:metrics][:uncappedFlops],
-        Float64.(data[:byProgram][:metrics][:bandwidthUtils]),
-        data[:byProgram][:metrics][:rawTime],
-        data[:byProgram][:metrics][:rawFlops],
-        data[:byProgram][:metrics][:bf16Flops],
-        data[:byProgram][:metrics][:normalizedTimePs],
-        Float64.(data[:byProgram][:metrics][:rawBytesAccessedArray]),
-        data[:byProgram][:metrics][:occurrences],
-        data[:byProgram][:metrics][:avgTimePs],
+        m[:flops],
+        m[:uncappedFlops],
+        Float64.(m[:bandwidthUtils]),
+        m[:rawTime],
+        m[:rawFlops],
+        m[:bf16Flops],
+        m[:normalizedTimePs],
+        Float64.(m[:rawBytesAccessedArray]),
+        m[:occurrences],
+        m[:avgTimePs],
     )
 end
 
@@ -1471,8 +2322,10 @@ function print_kernel_report(
 end
 
 function get_framework_op_stats(xplane_file::String; include_idle::Bool=false)
-    raw_data = JSON.parse(xspace_to_tools_data([xplane_file], "framework_op_stats")[1])
-    length(raw_data) == 2 || return Proto.tensorflow.profiler.TfStatsRecord[]
+    raw_bytes = xspace_to_tools_data([xplane_file], "framework_op_stats")[1]
+    isempty(raw_bytes) && return _cpu_framework_op_stats(xplane_file)
+    raw_data = JSON.parse(raw_bytes)
+    length(raw_data) == 2 || return _cpu_framework_op_stats(xplane_file)
 
     data = include_idle ? raw_data[1] : raw_data[2]
 
@@ -1531,6 +2384,7 @@ function get_framework_op_stats(xplane_file::String; include_idle::Bool=false)
         )
     end
 
+    isempty(reports) && return _cpu_framework_op_stats(xplane_file)
     return reports
 end
 
@@ -1650,8 +2504,8 @@ function print_framework_op_stats(
     raw_durations = Matrix{UInt64}(undef, length(reports), 2)
 
     for (i, r) in enumerate(reports)
-        raw_durations[i, 1] = r.total_self_time_in_us * 1000
-        raw_durations[i, 2] = r.avg_self_time_in_us * 1000
+        raw_durations[i, 1] = round(UInt64, max(0.0, r.total_self_time_in_us * 1000))
+        raw_durations[i, 2] = round(UInt64, max(0.0, r.avg_self_time_in_us * 1000))
 
         for (j, (_, extractor, _)) in enumerate(columns)
             data[i, j] = extractor(r)

@@ -352,6 +352,8 @@ struct OverviewPageAnalysis
     device_duty_cycle_percent::Float64
     hbm_utilization_percent::Float64
     program_goodput_percent::Float64
+    program_goodput_high_confidence_percent::Float64
+    device_duty_cycle_high_confidence_percent::Float64
     sc_step_time_ms_average::Float64
     sc_infeed_time_ms_avg::Float64
     sc_outfeed_time_ms_avg::Float64
@@ -364,9 +366,14 @@ struct OverviewPageAnalysis
     fw_max_hbm_pl2_power_watts::Float64
     fw_max_hbm_pl3_power_watts::Float64
     fw_max_hbm_pl4_power_watts::Float64
+    has_program_goodput::Bool
+    idle_time_high_confidence_ps::Float64
+    active_step_time_ms_average::Float64
+    tc_active_time_ms_average::Float64
+    sc_active_time_ms_average::Float64
 end
-PB.default_values(::Type{OverviewPageAnalysis}) = (;mxu_utilization_percent = zero(Float64), device_idle_time_percent = zero(Float64), host_idle_time_percent = zero(Float64), top_device_ops = Vector{OverviewTfOp}(), remark_text = "", remark_color = "", flop_rate_utilization_relative_to_roofline_percent = zero(Float64), memory_bw_utilization_relative_to_hw_limit_percent = zero(Float64), device_compute_16bit_percent = zero(Float64), device_compute_32bit_percent = zero(Float64), host_tf_op_percent = zero(Float64), device_tf_op_percent = zero(Float64), host_trace_level = zero(UInt32), host_op_time_eager_percent = zero(Float64), device_op_time_eager_percent = zero(Float64), device_op_time_outside_compilation_percent = zero(Float64), device_duty_cycle_percent = zero(Float64), hbm_utilization_percent = zero(Float64), program_goodput_percent = zero(Float64), sc_step_time_ms_average = zero(Float64), sc_infeed_time_ms_avg = zero(Float64), sc_outfeed_time_ms_avg = zero(Float64), sc_idle_time_ms_avg = zero(Float64), fw_max_vdd_core_pl1_power_watts = zero(Float64), fw_max_vdd_core_pl2_power_watts = zero(Float64), fw_max_vdd_core_pl3_power_watts = zero(Float64), fw_max_vdd_core_pl4_power_watts = zero(Float64), fw_max_hbm_pl1_power_watts = zero(Float64), fw_max_hbm_pl2_power_watts = zero(Float64), fw_max_hbm_pl3_power_watts = zero(Float64), fw_max_hbm_pl4_power_watts = zero(Float64))
-PB.field_numbers(::Type{OverviewPageAnalysis}) = (;mxu_utilization_percent = 1, device_idle_time_percent = 2, host_idle_time_percent = 3, top_device_ops = 4, remark_text = 5, remark_color = 6, flop_rate_utilization_relative_to_roofline_percent = 7, memory_bw_utilization_relative_to_hw_limit_percent = 8, device_compute_16bit_percent = 9, device_compute_32bit_percent = 10, host_tf_op_percent = 11, device_tf_op_percent = 12, host_trace_level = 13, host_op_time_eager_percent = 14, device_op_time_eager_percent = 15, device_op_time_outside_compilation_percent = 16, device_duty_cycle_percent = 17, hbm_utilization_percent = 31, program_goodput_percent = 18, sc_step_time_ms_average = 19, sc_infeed_time_ms_avg = 20, sc_outfeed_time_ms_avg = 21, sc_idle_time_ms_avg = 22, fw_max_vdd_core_pl1_power_watts = 23, fw_max_vdd_core_pl2_power_watts = 24, fw_max_vdd_core_pl3_power_watts = 25, fw_max_vdd_core_pl4_power_watts = 26, fw_max_hbm_pl1_power_watts = 27, fw_max_hbm_pl2_power_watts = 28, fw_max_hbm_pl3_power_watts = 29, fw_max_hbm_pl4_power_watts = 30)
+PB.default_values(::Type{OverviewPageAnalysis}) = (;mxu_utilization_percent = zero(Float64), device_idle_time_percent = zero(Float64), host_idle_time_percent = zero(Float64), top_device_ops = Vector{OverviewTfOp}(), remark_text = "", remark_color = "", flop_rate_utilization_relative_to_roofline_percent = zero(Float64), memory_bw_utilization_relative_to_hw_limit_percent = zero(Float64), device_compute_16bit_percent = zero(Float64), device_compute_32bit_percent = zero(Float64), host_tf_op_percent = zero(Float64), device_tf_op_percent = zero(Float64), host_trace_level = zero(UInt32), host_op_time_eager_percent = zero(Float64), device_op_time_eager_percent = zero(Float64), device_op_time_outside_compilation_percent = zero(Float64), device_duty_cycle_percent = zero(Float64), hbm_utilization_percent = zero(Float64), program_goodput_percent = zero(Float64), program_goodput_high_confidence_percent = zero(Float64), device_duty_cycle_high_confidence_percent = zero(Float64), sc_step_time_ms_average = zero(Float64), sc_infeed_time_ms_avg = zero(Float64), sc_outfeed_time_ms_avg = zero(Float64), sc_idle_time_ms_avg = zero(Float64), fw_max_vdd_core_pl1_power_watts = zero(Float64), fw_max_vdd_core_pl2_power_watts = zero(Float64), fw_max_vdd_core_pl3_power_watts = zero(Float64), fw_max_vdd_core_pl4_power_watts = zero(Float64), fw_max_hbm_pl1_power_watts = zero(Float64), fw_max_hbm_pl2_power_watts = zero(Float64), fw_max_hbm_pl3_power_watts = zero(Float64), fw_max_hbm_pl4_power_watts = zero(Float64), has_program_goodput = false, idle_time_high_confidence_ps = zero(Float64), active_step_time_ms_average = zero(Float64), tc_active_time_ms_average = zero(Float64), sc_active_time_ms_average = zero(Float64))
+PB.field_numbers(::Type{OverviewPageAnalysis}) = (;mxu_utilization_percent = 1, device_idle_time_percent = 2, host_idle_time_percent = 3, top_device_ops = 4, remark_text = 5, remark_color = 6, flop_rate_utilization_relative_to_roofline_percent = 7, memory_bw_utilization_relative_to_hw_limit_percent = 8, device_compute_16bit_percent = 9, device_compute_32bit_percent = 10, host_tf_op_percent = 11, device_tf_op_percent = 12, host_trace_level = 13, host_op_time_eager_percent = 14, device_op_time_eager_percent = 15, device_op_time_outside_compilation_percent = 16, device_duty_cycle_percent = 17, hbm_utilization_percent = 31, program_goodput_percent = 18, program_goodput_high_confidence_percent = 61, device_duty_cycle_high_confidence_percent = 62, sc_step_time_ms_average = 19, sc_infeed_time_ms_avg = 20, sc_outfeed_time_ms_avg = 21, sc_idle_time_ms_avg = 22, fw_max_vdd_core_pl1_power_watts = 23, fw_max_vdd_core_pl2_power_watts = 24, fw_max_vdd_core_pl3_power_watts = 25, fw_max_vdd_core_pl4_power_watts = 26, fw_max_hbm_pl1_power_watts = 27, fw_max_hbm_pl2_power_watts = 28, fw_max_hbm_pl3_power_watts = 29, fw_max_hbm_pl4_power_watts = 30, has_program_goodput = 63, idle_time_high_confidence_ps = 64, active_step_time_ms_average = 65, tc_active_time_ms_average = 66, sc_active_time_ms_average = 67)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPageAnalysis}, _endpos::Int=0, _group::Bool=false)
     mxu_utilization_percent = zero(Float64)
@@ -388,6 +395,8 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPageAnalysis}, _
     device_duty_cycle_percent = zero(Float64)
     hbm_utilization_percent = zero(Float64)
     program_goodput_percent = zero(Float64)
+    program_goodput_high_confidence_percent = zero(Float64)
+    device_duty_cycle_high_confidence_percent = zero(Float64)
     sc_step_time_ms_average = zero(Float64)
     sc_infeed_time_ms_avg = zero(Float64)
     sc_outfeed_time_ms_avg = zero(Float64)
@@ -400,6 +409,11 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPageAnalysis}, _
     fw_max_hbm_pl2_power_watts = zero(Float64)
     fw_max_hbm_pl3_power_watts = zero(Float64)
     fw_max_hbm_pl4_power_watts = zero(Float64)
+    has_program_goodput = false
+    idle_time_high_confidence_ps = zero(Float64)
+    active_step_time_ms_average = zero(Float64)
+    tc_active_time_ms_average = zero(Float64)
+    sc_active_time_ms_average = zero(Float64)
     while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
@@ -440,6 +454,10 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPageAnalysis}, _
             hbm_utilization_percent = PB.decode(d, Float64)
         elseif field_number == 18
             program_goodput_percent = PB.decode(d, Float64)
+        elseif field_number == 61
+            program_goodput_high_confidence_percent = PB.decode(d, Float64)
+        elseif field_number == 62
+            device_duty_cycle_high_confidence_percent = PB.decode(d, Float64)
         elseif field_number == 19
             sc_step_time_ms_average = PB.decode(d, Float64)
         elseif field_number == 20
@@ -464,11 +482,21 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPageAnalysis}, _
             fw_max_hbm_pl3_power_watts = PB.decode(d, Float64)
         elseif field_number == 30
             fw_max_hbm_pl4_power_watts = PB.decode(d, Float64)
+        elseif field_number == 63
+            has_program_goodput = PB.decode(d, Bool)
+        elseif field_number == 64
+            idle_time_high_confidence_ps = PB.decode(d, Float64)
+        elseif field_number == 65
+            active_step_time_ms_average = PB.decode(d, Float64)
+        elseif field_number == 66
+            tc_active_time_ms_average = PB.decode(d, Float64)
+        elseif field_number == 67
+            sc_active_time_ms_average = PB.decode(d, Float64)
         else
             Base.skip(d, wire_type)
         end
     end
-    return OverviewPageAnalysis(mxu_utilization_percent, device_idle_time_percent, host_idle_time_percent, top_device_ops[], remark_text, remark_color, flop_rate_utilization_relative_to_roofline_percent, memory_bw_utilization_relative_to_hw_limit_percent, device_compute_16bit_percent, device_compute_32bit_percent, host_tf_op_percent, device_tf_op_percent, host_trace_level, host_op_time_eager_percent, device_op_time_eager_percent, device_op_time_outside_compilation_percent, device_duty_cycle_percent, hbm_utilization_percent, program_goodput_percent, sc_step_time_ms_average, sc_infeed_time_ms_avg, sc_outfeed_time_ms_avg, sc_idle_time_ms_avg, fw_max_vdd_core_pl1_power_watts, fw_max_vdd_core_pl2_power_watts, fw_max_vdd_core_pl3_power_watts, fw_max_vdd_core_pl4_power_watts, fw_max_hbm_pl1_power_watts, fw_max_hbm_pl2_power_watts, fw_max_hbm_pl3_power_watts, fw_max_hbm_pl4_power_watts)
+    return OverviewPageAnalysis(mxu_utilization_percent, device_idle_time_percent, host_idle_time_percent, top_device_ops[], remark_text, remark_color, flop_rate_utilization_relative_to_roofline_percent, memory_bw_utilization_relative_to_hw_limit_percent, device_compute_16bit_percent, device_compute_32bit_percent, host_tf_op_percent, device_tf_op_percent, host_trace_level, host_op_time_eager_percent, device_op_time_eager_percent, device_op_time_outside_compilation_percent, device_duty_cycle_percent, hbm_utilization_percent, program_goodput_percent, program_goodput_high_confidence_percent, device_duty_cycle_high_confidence_percent, sc_step_time_ms_average, sc_infeed_time_ms_avg, sc_outfeed_time_ms_avg, sc_idle_time_ms_avg, fw_max_vdd_core_pl1_power_watts, fw_max_vdd_core_pl2_power_watts, fw_max_vdd_core_pl3_power_watts, fw_max_vdd_core_pl4_power_watts, fw_max_hbm_pl1_power_watts, fw_max_hbm_pl2_power_watts, fw_max_hbm_pl3_power_watts, fw_max_hbm_pl4_power_watts, has_program_goodput, idle_time_high_confidence_ps, active_step_time_ms_average, tc_active_time_ms_average, sc_active_time_ms_average)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::OverviewPageAnalysis)
@@ -492,6 +520,8 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::OverviewPageAnalysis)
     x.device_duty_cycle_percent !== zero(Float64) && PB.encode(e, 17, x.device_duty_cycle_percent)
     x.hbm_utilization_percent !== zero(Float64) && PB.encode(e, 31, x.hbm_utilization_percent)
     x.program_goodput_percent !== zero(Float64) && PB.encode(e, 18, x.program_goodput_percent)
+    x.program_goodput_high_confidence_percent !== zero(Float64) && PB.encode(e, 61, x.program_goodput_high_confidence_percent)
+    x.device_duty_cycle_high_confidence_percent !== zero(Float64) && PB.encode(e, 62, x.device_duty_cycle_high_confidence_percent)
     x.sc_step_time_ms_average !== zero(Float64) && PB.encode(e, 19, x.sc_step_time_ms_average)
     x.sc_infeed_time_ms_avg !== zero(Float64) && PB.encode(e, 20, x.sc_infeed_time_ms_avg)
     x.sc_outfeed_time_ms_avg !== zero(Float64) && PB.encode(e, 21, x.sc_outfeed_time_ms_avg)
@@ -504,6 +534,11 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::OverviewPageAnalysis)
     x.fw_max_hbm_pl2_power_watts !== zero(Float64) && PB.encode(e, 28, x.fw_max_hbm_pl2_power_watts)
     x.fw_max_hbm_pl3_power_watts !== zero(Float64) && PB.encode(e, 29, x.fw_max_hbm_pl3_power_watts)
     x.fw_max_hbm_pl4_power_watts !== zero(Float64) && PB.encode(e, 30, x.fw_max_hbm_pl4_power_watts)
+    x.has_program_goodput != false && PB.encode(e, 63, x.has_program_goodput)
+    x.idle_time_high_confidence_ps !== zero(Float64) && PB.encode(e, 64, x.idle_time_high_confidence_ps)
+    x.active_step_time_ms_average !== zero(Float64) && PB.encode(e, 65, x.active_step_time_ms_average)
+    x.tc_active_time_ms_average !== zero(Float64) && PB.encode(e, 66, x.tc_active_time_ms_average)
+    x.sc_active_time_ms_average !== zero(Float64) && PB.encode(e, 67, x.sc_active_time_ms_average)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::OverviewPageAnalysis)
@@ -527,6 +562,8 @@ function PB._encoded_size(x::OverviewPageAnalysis)
     x.device_duty_cycle_percent !== zero(Float64) && (encoded_size += PB._encoded_size(x.device_duty_cycle_percent, 17))
     x.hbm_utilization_percent !== zero(Float64) && (encoded_size += PB._encoded_size(x.hbm_utilization_percent, 31))
     x.program_goodput_percent !== zero(Float64) && (encoded_size += PB._encoded_size(x.program_goodput_percent, 18))
+    x.program_goodput_high_confidence_percent !== zero(Float64) && (encoded_size += PB._encoded_size(x.program_goodput_high_confidence_percent, 61))
+    x.device_duty_cycle_high_confidence_percent !== zero(Float64) && (encoded_size += PB._encoded_size(x.device_duty_cycle_high_confidence_percent, 62))
     x.sc_step_time_ms_average !== zero(Float64) && (encoded_size += PB._encoded_size(x.sc_step_time_ms_average, 19))
     x.sc_infeed_time_ms_avg !== zero(Float64) && (encoded_size += PB._encoded_size(x.sc_infeed_time_ms_avg, 20))
     x.sc_outfeed_time_ms_avg !== zero(Float64) && (encoded_size += PB._encoded_size(x.sc_outfeed_time_ms_avg, 21))
@@ -539,6 +576,11 @@ function PB._encoded_size(x::OverviewPageAnalysis)
     x.fw_max_hbm_pl2_power_watts !== zero(Float64) && (encoded_size += PB._encoded_size(x.fw_max_hbm_pl2_power_watts, 28))
     x.fw_max_hbm_pl3_power_watts !== zero(Float64) && (encoded_size += PB._encoded_size(x.fw_max_hbm_pl3_power_watts, 29))
     x.fw_max_hbm_pl4_power_watts !== zero(Float64) && (encoded_size += PB._encoded_size(x.fw_max_hbm_pl4_power_watts, 30))
+    x.has_program_goodput != false && (encoded_size += PB._encoded_size(x.has_program_goodput, 63))
+    x.idle_time_high_confidence_ps !== zero(Float64) && (encoded_size += PB._encoded_size(x.idle_time_high_confidence_ps, 64))
+    x.active_step_time_ms_average !== zero(Float64) && (encoded_size += PB._encoded_size(x.active_step_time_ms_average, 65))
+    x.tc_active_time_ms_average !== zero(Float64) && (encoded_size += PB._encoded_size(x.tc_active_time_ms_average, 66))
+    x.sc_active_time_ms_average !== zero(Float64) && (encoded_size += PB._encoded_size(x.sc_active_time_ms_average, 67))
     return encoded_size
 end
 

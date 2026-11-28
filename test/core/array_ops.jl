@@ -497,6 +497,57 @@ end
     end
 end
 
+mutable struct DeepcopyAliasingHolder{A}
+    a::A
+    b::A
+end
+
+@testset "deepcopy preserves aliasing" begin
+    x = Reactant.to_rarray(Float32[1, 2, 3])
+
+    # Shared references within a container stay shared after `deepcopy`
+    t = (a=x, b=x)
+    c = deepcopy(t)
+    @test c.a === c.b
+    @test c.a !== x
+    @test Array(c.a) == Float32[1, 2, 3]
+
+    h = DeepcopyAliasingHolder(x, x)
+    hc = deepcopy(h)
+    @test hc.a === hc.b
+    @test hc.a !== x
+    @test Array(hc.a) == Float32[1, 2, 3]
+
+    # Aliasing is preserved across nested containers
+    n = (; fields=(; u=x), lookup=(x, x))
+    nc = deepcopy(n)
+    @test nc.fields.u === nc.lookup[1] === nc.lookup[2]
+
+    # Distinct arrays stay distinct
+    y = Reactant.to_rarray(Float32[4, 5, 6])
+    d = deepcopy((x, y, x))
+    @test d[1] === d[3]
+    @test d[1] !== d[2]
+    @test Array(d[2]) == Float32[4, 5, 6]
+
+    # The copy is independent of the original
+    fill!(c.a, 7)
+    @test Array(c.b) == fill(7.0f0, 3)
+    @test Array(x) == Float32[1, 2, 3]
+
+    # A lone array still deepcopies
+    z = deepcopy(x)
+    @test z !== x
+    @test Array(z) == Float32[1, 2, 3]
+
+    # Numbers too
+    s = Reactant.to_rarray(4.0; track_numbers=Number)
+    sc = deepcopy((s, s))
+    @test sc[1] === sc[2]
+    @test sc[1] !== s
+    @test Reactant.to_number(sc[1]) == 4.0
+end
+
 @testset "map!" begin
     x = Reactant.TestUtils.construct_test_array(Float32, 2, 3)
     y = zeros(Float32, 2, 3)

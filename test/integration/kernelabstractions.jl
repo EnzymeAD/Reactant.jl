@@ -28,7 +28,7 @@ if !Reactant.Accelerators.TPU.has_tpu()
         A = Reactant.to_rarray(ones(100, 100))
         out = Reactant.to_rarray(ones(100, 100))
         platform_name = Reactant.XLA.platform_name(Reactant.XLA.default_backend())
-        raise = platform_name ∉ ("cpu", "cuda")
+        raise = platform_name ∉ ("cpu", "cuda", "rocm")
         @jit raise = raise matmul!(out, A)
         out_c = Array(out)
         A_c = Array(A)
@@ -70,7 +70,7 @@ end
     x = Reactant.to_rarray(collect(1:1:64) ./ 64)
 
     platform_name = Reactant.XLA.platform_name(Reactant.XLA.default_backend())
-    raise = platform_name ∉ ("cpu", "cuda")
+    raise = platform_name ∉ ("cpu", "cuda", "rocm")
 
     b = get_backend(x)
     @test b isa Base.get_extension(Reactant, :ReactantKernelAbstractionsExt).ReactantBackend
@@ -121,12 +121,23 @@ end
     c = Reactant.to_rarray(Float64[0.5, 0.5, 0.5, 0.5])
     out = Reactant.to_rarray(zeros(Float64, 4))
 
+    platform_name = lowercase(Reactant.XLA.platform_name(Reactant.XLA.default_backend()))
     ir = repr(Reactant.@code_hlo raise = true run_fma!(out, a, b, c))
-    @test @filecheck begin
-        @check "%0 = stablehlo.multiply %arg1, %arg2 : tensor<4xf64>"
-        @check_next "%1 = stablehlo.add %0, %arg3 : tensor<4xf64>"
-        @check_next "return %1 : tensor<4xf64>"
-        ir
+    if platform_name == "tpu" && occursin("stablehlo.multiply", ir)
+        # lower-enzymexla-math decomposes unsupported stablehlo.fma on TPU into
+        # multiply + add.
+        @test @filecheck begin
+            @check "%0 = stablehlo.multiply %arg1, %arg2 : tensor<4xf64>"
+            @check_next "%1 = stablehlo.add %0, %arg3 : tensor<4xf64>"
+            @check_next "return %1 : tensor<4xf64>"
+            ir
+        end
+    else
+        @test @filecheck begin
+            @check "%0 = stablehlo.fma %arg1, %arg2, %arg3 : tensor<4xf64>"
+            @check_next "return %0 : tensor<4xf64>"
+            ir
+        end
     end
 end
 
@@ -268,6 +279,28 @@ end
     end
 end
 
+# A type passed as a kernel argument is a constant, which the kernel is compiled for and
+# which is not passed at run time; the argument after it must still reach the kernel.
+@kernel function fill_typed_kernel!(y, FT, x)
+    i = @index(Global)
+    @inbounds y[i] = convert(FT, 2) * x[i]
+end
+
+function launch_typed!(y, FT, x)
+    fill_typed_kernel!(KernelAbstractions.get_backend(y))(y, FT, x; ndrange=length(y))
+    return nothing
+end
+
+@testset "KernelAbstractions type argument (raised)" begin
+    x = Float32[1, 2, 3]
+    y_cpu = zeros(Float32, 3)
+    launch_typed!(y_cpu, Float32, x)
+
+    y = Reactant.to_rarray(zeros(Float32, 3))
+    @jit raise = true launch_typed!(y, Float32, Reactant.to_rarray(x))
+    @test Array(y) == y_cpu
+end
+
 # A raised kernel clamps traced numbers. Inside a kernel `convert` to the kernel's traced
 # number type returns a pointer to the value, which `clamp` has to load rather than return.
 @kernel function clamp_kernel!(out, @Const(x), s, ::Val{form}) where {form}
@@ -296,5 +329,29 @@ end
         out = Reactant.to_rarray(zeros(Float32, 8))
         @jit raise = true launch_clamp!(out, Reactant.to_rarray(x), s, Val(form))
         @test Array(out) == clamp.(x, 2, 5)
+    end
+end
+
+# An empty ndrange launches no work items. With a dynamic workgroup size the ndrange is also
+# used as the preliminary workgroup size. This test makes sure we can handle this case without
+# any divide by zero errors.
+function launch_scale!(y, x)
+    scale!(KernelAbstractions.get_backend(y))(y, x, 2.0; ndrange=size(y))
+    return nothing
+end
+
+@testset "KernelAbstractions empty ndrange" begin
+    @testset "raise = $raise" for raise in (false, true)
+        x = Reactant.to_rarray(zeros(0))
+        y = Reactant.to_rarray(zeros(0))
+        @jit raise = raise launch_elementwise!(double_kernel!, y, x)
+        @test size(Array(y)) == (0,)
+
+        @testset "size $sz" for sz in ((0, 3), (3, 0))
+            x = Reactant.to_rarray(zeros(sz))
+            y = Reactant.to_rarray(zeros(sz))
+            @jit raise = raise launch_scale!(y, x)
+            @test size(Array(y)) == sz
+        end
     end
 end

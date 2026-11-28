@@ -30,18 +30,64 @@ linear(x, W, b) = (W * x) .+ b
         end
 
         framework_stats = Reactant.Profiler.get_framework_op_stats(file)
-        if !RunningOnCPU
-            @test length(framework_stats) > 0
+        @test length(framework_stats) > 0
+
+        metrics = Reactant.Profiler.get_aggregate_metrics(file, 10)
+        @test metrics isa Reactant.Proto.tensorflow.profiler.op_profile.Metrics
+        @test metrics.raw_time > 0
+        @test metrics.raw_flops_rate > 0
+        @test metrics.bf16_flops_rate > 0
+        @test isfinite(metrics.raw_flops_rate)
+        @test isfinite(metrics.bf16_flops_rate)
+        @test metrics.raw_flops_rate ≈ metrics.raw_flops / (metrics.raw_time * 1e-12)
+        @test metrics.bf16_flops_rate ≈ metrics.bf16_flops / (metrics.raw_time * 1e-12)
+        if RunningOnCPU
+            expected_step_flops = Reactant.XLA.cost_analysis(fn).flops
+            @test metrics.raw_flops == 10 * expected_step_flops
+            @test metrics.occurrences == 10
         end
 
-        metrics = Reactant.Profiler.get_aggregate_metrics(file, 1)
-        if !RunningOnCPU
-            @test metrics isa Reactant.Proto.tensorflow.profiler.op_profile.Metrics
-            @test metrics.raw_flops_rate > 0
-            @test metrics.bf16_flops_rate > 0
-            @test metrics.raw_flops_rate ≈ metrics.raw_flops / (metrics.raw_time * 1e-12)
-            @test metrics.bf16_flops_rate ≈ metrics.bf16_flops / (metrics.raw_time * 1e-12)
+        # Zero-FLOP and zero-time edge cases must never produce NaN rates
+        zero_metrics = Reactant.Proto.tensorflow.profiler.op_profile.Metrics(
+            0.0, 0.0, Float64[], 0.0, 0.0, 0.0, 0.0, Float64[], UInt32(0), 0.0
+        )
+        @test zero_metrics.raw_flops_rate == 0.0
+        @test zero_metrics.bf16_flops_rate == 0.0
+
+        noop_fn = @compile sync = true identity(x)
+        noop_prof = Reactant.Profiler.profile_with_xprof(noop_fn, x; nrepeat=4, warmup=1)
+        @test noop_prof.profiling_result.runtime_ns > 0
+        if noop_prof.profiling_result.metrics_data !== nothing
+            @test isfinite(noop_prof.profiling_result.metrics_data.raw_flops_rate)
+            @test isfinite(noop_prof.profiling_result.metrics_data.bf16_flops_rate)
         end
+
+        function loop_fma(a)
+            acc = copy(a)
+            @trace for _ in 1:5
+                acc = muladd.(acc, a, a)
+            end
+            return acc
+        end
+        loop_fn = @compile sync = true loop_fma(x)
+        loop_prof = Reactant.Profiler.profile_with_xprof(loop_fn, x; nrepeat=3, warmup=1)
+        @test loop_prof.profiling_result.metrics_data !== nothing
+        @test loop_prof.profiling_result.metrics_data.raw_time > 0
+        @test loop_prof.profiling_result.metrics_data.raw_flops >= 3 * 5 * 2 * length(x)
+        @test isfinite(loop_prof.profiling_result.metrics_data.raw_flops_rate)
+        @test loop_prof.profiling_result.metrics_data.raw_flops_rate > 0
+
+        big_x = Reactant.to_rarray(ones(Float32, 256, 256))
+        big_loop_fn = @compile sync = true loop_fma(big_x)
+        big_loop_prof = Reactant.Profiler.profile_with_xprof(
+            big_loop_fn, big_x; nrepeat=2, warmup=1
+        )
+        @test big_loop_prof.profiling_result.metrics_data !== nothing
+        @test big_loop_prof.profiling_result.metrics_data.raw_time > 0
+        @test big_loop_prof.profiling_result.metrics_data.raw_flops >=
+            2 * 5 * 2 * length(big_x)
+        @test isfinite(big_loop_prof.profiling_result.metrics_data.raw_flops_rate)
+        @test big_loop_prof.profiling_result.metrics_data.raw_flops_rate > 0
 
         Reactant.@timed nrepeat = 32 linear(x, W, b)
         Reactant.@time nrepeat = 32 linear(x, W, b)
@@ -54,7 +100,14 @@ end
 
 @testset "Compile timings" begin
     if !Sys.iswindows()
-        fn, timings = Reactant.Profiler.@timed_compile linear(x, W, b)
+        # At the default precision a TPU does this Float32 matmul in bfloat16, and
+        # the result is off by ~1e-3 relative; the test is about the compile
+        # timings, not the accelerator's default precision.
+        fn, timings = Reactant.with_config(;
+            dot_general_precision=Reactant.PrecisionConfig.HIGHEST
+        ) do
+            Reactant.Profiler.@timed_compile linear(x, W, b)
+        end
         @test Array(fn(x, W, b)) ≈ linear(Array(x), Array(W), Array(b))
 
         @test timings isa Reactant.Profiler.CompileTimings
