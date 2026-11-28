@@ -1,0 +1,23 @@
+name = "StructuredReactant"
+uuid = "d9304b73-2dfb-44d9-84cc-67fa0b51c9dd"
+authors = ["Anton Oresten"]
+version = "0.1.0"
+
+[deps]
+CompilerCaching = "9db33cc3-5358-4881-8759-fa4194144afd"
+IRStructurizer = "93e32bba-5bb8-402b-805d-ffb066edee93"
+PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
+Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
+ReactantCore = "a3311ec8-5e00-46d5-b541-4f83e724a433"
+
+[sources]
+Reactant = {path = "../.."}
+ReactantCore = {path = "../ReactantCore"}
+
+[compat]
+CompilerCaching = "0.5"
+IRStructurizer = "0.6.5, 0.7"
+PrecompileTools = "1"
+Reactant = "0.2"
+ReactantCore = "0.1"
+julia = "1.11"

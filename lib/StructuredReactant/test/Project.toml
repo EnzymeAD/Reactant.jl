@@ -1,0 +1,14 @@
+[deps]
+Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
+FileCheck = "4e644321-382b-4b05-b0b6-5d23c3d944fb"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
+StructuredReactant = "d9304b73-2dfb-44d9-84cc-67fa0b51c9dd"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[sources]
+Reactant = {path = "../../.."}
+StructuredReactant = {path = ".."}
+
+[extras]
+Reactant_jll = "0192cb87-2b54-54ad-80e0-3be72ad8a3c0"
